@@ -126,11 +126,19 @@ void *idVertexCache::Position( vertCache_t *buffer ) {
 				common->Printf( "GL_ARRAY_BUFFER_ARB = %i (%i bytes)\n", buffer->vbo, buffer->size );
 			}
 		}
+#ifdef __MORPHOS__
+		if( buffer->vbo != currentVertexBuffer )
+		{
+			qglBindBufferARB( (buffer->indexBuffer ? GL_ELEMENT_ARRAY_BUFFER_ARB : GL_ARRAY_BUFFER_ARB), buffer->vbo );
+			currentVertexBuffer = buffer->vbo;
+		}
+#else
 		if ( buffer->indexBuffer ) {
 			qglBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, buffer->vbo );
 		} else {
 			qglBindBufferARB( GL_ARRAY_BUFFER_ARB, buffer->vbo );
 		}
+#endif
 		return (void *)buffer->offset;
 	}
 
@@ -156,11 +164,16 @@ void idVertexCache::Init() {
 	if ( r_vertexBufferMegs.GetInteger() < 8 ) {
 		r_vertexBufferMegs.SetInteger( 8 );
 	}
-
+#ifndef __MORPHOS__
 	virtualMemory = false;
-
+#else
+	currentVertexBuffer = 0;
+#endif
 	// use ARB_vertex_buffer_object unless explicitly disabled
 	if( r_useVertexBuffers.GetInteger() && glConfig.ARBVertexBufferObjectAvailable ) {
+#ifdef __MORPHOS__
+		virtualMemory = false;
+#endif
 		common->Printf( "using ARB_vertex_buffer_object memory\n" );
 	} else {
 		virtualMemory = true;
@@ -206,6 +219,9 @@ void idVertexCache::PurgeAll() {
 	while( staticHeaders.next != &staticHeaders ) {
 		ActuallyFree( staticHeaders.next );
 	}
+#ifdef __MORPHOS__
+	currentVertexBuffer = 0;
+#endif
 }
 
 /*
@@ -217,6 +233,9 @@ void idVertexCache::Shutdown() {
 //	PurgeAll();	// !@#: also purge the temp buffers
 
 	headerAllocator.Shutdown();
+#ifdef __MORPHOS__
+	currentVertexBuffer = 0;
+#endif
 }
 
 /*
@@ -225,7 +244,11 @@ idVertexCache::Alloc
 ===========
 */
 void idVertexCache::Alloc( void *data, int size, vertCache_t **buffer, bool indexBuffer ) {
+#ifdef __MORPHOS__
+	vertCache_t *block = NULL;
+#else
 	vertCache_t	*block;
+#endif
 
 	if ( size <= 0 ) {
 		common->Error( "idVertexCache::Alloc: size = %i\n", size );
@@ -235,23 +258,57 @@ void idVertexCache::Alloc( void *data, int size, vertCache_t **buffer, bool inde
 	*buffer = NULL;
 
 	// if we don't have any remaining unused headers, allocate some more
+#ifdef __MORPHOS__
+	if ( freeStaticHeaders.next == &freeStaticHeaders ) // Cowcat notes: Huge lag here for MOS. ( Fixed for MOS 3.17 )
+	{
+		common->Printf( "-----Alloc more headers in. Size = %i\n", size ); // not needed for other systems ( OS4? )
+#else
 	if ( freeStaticHeaders.next == &freeStaticHeaders ) {
+#endif
 
 		for ( int i = 0; i < EXPAND_HEADERS; i++ ) {
 			block = headerAllocator.Alloc();
+#ifdef __MORPHOS__
+			if( !virtualMemory ) {
+				qglGenBuffersARB( 1, &block->vbo );
+				block->size = 0;
+			}
+#endif
 			block->next = freeStaticHeaders.next;
 			block->prev = &freeStaticHeaders;
 			block->next->prev = block;
 			block->prev->next = block;
-
+#ifndef __MORPHOS__
 			if( !virtualMemory ) {
 				qglGenBuffersARB( 1, & block->vbo );
 			}
+#endif
 		}
 	}
+#ifdef __MORPHOS__
+	// try to find a matching block to replace so that we're not continually respecifying vbo data each frame
+	for (vertCache_t *findblock = freeStaticHeaders.next; /**/; findblock = findblock->next)
+	{
+		if(findblock == &freeStaticHeaders)
+		{
+			block = freeStaticHeaders.next;
+			break;
+		}
+
+		if(findblock->size != size)
+		{
+			continue;
+		}
+		
+		block = findblock;
+		break;
+	}
+#endif
 
 	// move it from the freeStaticHeaders list to the staticHeaders list
+#ifndef __MORPHOS__
 	block = freeStaticHeaders.next;
+#endif
 	block->next->prev = block->prev;
 	block->prev->next = block->next;
 	block->next = staticHeaders.next;
@@ -280,8 +337,13 @@ void idVertexCache::Alloc( void *data, int size, vertCache_t **buffer, bool inde
 
 	block->indexBuffer = indexBuffer;
 
+#ifdef __MORPHOS__
+	GLenum target = ( indexBuffer ? GL_ELEMENT_ARRAY_BUFFER_ARB : GL_ARRAY_BUFFER_ARB );
+	GLenum usage = ( allocatingTempBuffer ? GL_STREAM_DRAW_ARB : GL_STATIC_DRAW_ARB );
+#endif
 	// copy the data
 	if ( block->vbo ) {
+		#ifndef __MORPHOS__
 		if ( indexBuffer ) {
 			qglBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, block->vbo );
 			qglBufferDataARB( GL_ELEMENT_ARRAY_BUFFER_ARB, (GLsizeiptrARB)size, data, GL_STATIC_DRAW_ARB );
@@ -293,6 +355,17 @@ void idVertexCache::Alloc( void *data, int size, vertCache_t **buffer, bool inde
 				qglBufferDataARB( GL_ARRAY_BUFFER_ARB, (GLsizeiptrARB)size, data, GL_STATIC_DRAW_ARB );
 			}
 		}
+		#else
+		qglBindBufferARB( target, block->vbo );
+		qglBufferDataARB( target, (GLsizeiptrARB)size, data, usage );
+
+		// old tinygl needed this trick - Cowcat
+		//qglBufferDataARB( target, (GLsizeiptrARB)size, 0, usage );
+		//qglBufferSubDataARB( target, 0, (GLsizeiptrARB)size, data );
+
+		currentVertexBuffer = block->vbo;
+		
+		#endif
 	} else {
 		block->virtMem = Mem_Alloc( size );
 		SIMDProcessor->Memcpy( block->virtMem, data, size );
@@ -416,13 +489,25 @@ vertCache_t	*idVertexCache::AllocFrameTemp( void *data, int size ) {
 	block->frameUsed = 0;
 
 	// copy the data
+#ifndef __MORPHOS__
 	block->virtMem = tempBuffers[listNum]->virtMem;
+#endif
 	block->vbo = tempBuffers[listNum]->vbo;
 
 	if ( block->vbo ) {
+#ifdef __MORPHOS__
+		if( block->vbo != currentVertexBuffer ) {
+			qglBindBufferARB( GL_ARRAY_BUFFER_ARB, block->vbo );
+			currentVertexBuffer = block->vbo;
+		}		
+#else
 		qglBindBufferARB( GL_ARRAY_BUFFER_ARB, block->vbo );
+#endif
 		qglBufferSubDataARB( GL_ARRAY_BUFFER_ARB, block->offset, (GLsizeiptrARB)size, data );
 	} else {
+#ifdef __MORPHOS__		
+		block->virtMem = tempBuffers[listNum]->virtMem;
+#endif		
 		SIMDProcessor->Memcpy( (byte *)block->virtMem + block->offset, data, size );
 	}
 

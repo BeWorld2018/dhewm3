@@ -60,7 +60,7 @@ const float SUSPEND_ANGULAR_ACCELERATION	= 30.0f;
 const idVec6 vec6_lcp_epsilon				= idVec6( LCP_EPSILON, LCP_EPSILON, LCP_EPSILON,
 													 LCP_EPSILON, LCP_EPSILON, LCP_EPSILON );
 
-#define AF_TIMINGS
+//#define AF_TIMINGS // d3wasm - Cowcat
 
 #ifdef AF_TIMINGS
 static int lastTimerReset = 0;

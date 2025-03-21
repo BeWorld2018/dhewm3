@@ -1805,6 +1805,7 @@ void Sys_GenerateEvents() {
 
 	handleMouseGrab();
 
+ #if !defined(__MORPHOS__)
 	char *s = Sys_ConsoleInput();
 
 	if (s)
@@ -1826,7 +1827,7 @@ void Sys_GenerateEvents() {
 		in_grabKeyboard.ClearModified();
 	}
 #endif
-
+#endif
 	SDL_PumpEvents();
 }
 

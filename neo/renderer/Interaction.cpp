@@ -1140,8 +1140,8 @@ void idInteraction::AddActiveInteraction( void ) {
 					// touch the ambient surface so it won't get purged
 					vertexCache.Touch( lightTris->ambientCache );
 
-          if ( needLightingCache ) // Cowcat
-          {
+          			if ( needLightingCache ) // Cowcat
+          			{
 					    // regenerate the lighting cache (for non-vertex program cards) if it has been purged
 					    if ( !lightTris->lightingCache ) {
 						    if ( !R_CreateLightingCache( entityDef, lightDef, lightTris ) ) {
@@ -1155,7 +1155,7 @@ void idInteraction::AddActiveInteraction( void ) {
 					        //common->Printf( "TouchLightingCache\n");
 						    vertexCache.Touch( lightTris->lightingCache );
 					    }
-          }
+          			}
 
 					if ( !lightTris->indexCache && r_useIndexBuffers.GetBool() ) {
 						vertexCache.Alloc( lightTris->indexes, lightTris->numIndexes * sizeof( lightTris->indexes[0] ), &lightTris->indexCache, true );

@@ -141,6 +141,9 @@ private:
 											// staticHeaders.next is most recently used
 
 	int				frameBytes;				// for each of NUM_VERTEX_FRAMES frames
+#ifdef __MORPHOS__
+	GLuint			currentVertexBuffer;
+#endif
 };
 
 extern	idVertexCache	vertexCache;

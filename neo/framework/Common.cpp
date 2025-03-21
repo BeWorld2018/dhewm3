@@ -3310,9 +3310,9 @@ void idCommonLocal::InitGame( void ) {
 		SetMachineSpec();
 		Com_ExecMachineSpec_f( args );
 #ifdef __MORPHOS__
-    cvarSystem->SetCVarInteger( "s_numberOfSpeakers", 2 );
+    	cvarSystem->SetCVarInteger( "s_numberOfSpeakers", 2 );
 #else
-*		cvarSystem->SetCVarInteger( "s_numberOfSpeakers", 6 );
+		cvarSystem->SetCVarInteger( "s_numberOfSpeakers", 6 );
 #endif
 		cmdSystem->BufferCommandText( CMD_EXEC_NOW, "s_restart\n" );
 		cmdSystem->ExecuteCommandBuffer();
