@@ -1695,7 +1695,7 @@ static CVarOption videoOptionsImmediately[] = {
 	CVarOption( "r_shadows", "Enable Shadows", OT_BOOL ),
 	CVarOption( "r_skipSpecular", "Disable Specular", OT_BOOL ),
 	CVarOption( "r_skipBump", "Disable Bump Maps", OT_BOOL ),
-
+	CVarOption( "r_skipPostProcess", "Disable all post-process renderings", OT_BOOL ),
 };
 
 idList<VidMode> vidModes;
