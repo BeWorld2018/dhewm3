@@ -140,17 +140,16 @@ public:
 	virtual	void VPCALL MinMax( idVec3 &min,		idVec3 &max,			const idVec3 *src,		const int count ) = 0;
 	virtual	void VPCALL MinMax( idVec3 &min,		idVec3 &max,			const idDrawVert *src,	const int count ) = 0;
 	virtual	void VPCALL MinMax( idVec3 &min,		idVec3 &max,			const idDrawVert *src,	const int *indexes,		const int count ) = 0;
-    virtual	void VPCALL MinMax( idVec3 &min,		idVec3 &max,			const idDrawVert *src,	const short *indexes,	const int count ) = 0;
 
 	virtual	void VPCALL Clamp( float *dst,			const float *src,		const float min,		const float max,		const int count ) = 0;
 	virtual	void VPCALL ClampMin( float *dst,		const float *src,		const float min,		const int count ) = 0;
 	virtual	void VPCALL ClampMax( float *dst,		const float *src,		const float max,		const int count ) = 0;
 
-	static void VPCALL Memcpy( void *dst,			const void *src,		const int count );
-	static void VPCALL Memset( void *dst,			const int val,			const int count );
+	virtual void VPCALL Memcpy( void *dst,			const void *src,		const int count ) = 0;
+	virtual void VPCALL Memset( void *dst,			const int val,			const int count ) = 0;
 
 	// these assume 16 byte aligned and 16 byte padded memory
-	static void VPCALL Zero16( float *dst,			const int count );
+	virtual void VPCALL Zero16( float *dst,			const int count ) = 0;
 	virtual void VPCALL Negate16( float *dst,		const int count ) = 0;
 	virtual void VPCALL Copy16( float *dst,			const float *src,		const int count ) = 0;
 	virtual void VPCALL Add16( float *dst,			const float *src1,		const float *src2,		const int count ) = 0;
@@ -184,17 +183,11 @@ public:
 	virtual void VPCALL DecalPointCull( byte *cullBits, const idPlane *planes, const idDrawVert *verts, const int numVerts ) = 0;
 	virtual void VPCALL OverlayPointCull( byte *cullBits, idVec2 *texCoords, const idPlane *planes, const idDrawVert *verts, const int numVerts ) = 0;
 	virtual void VPCALL DeriveTriPlanes( idPlane *planes, const idDrawVert *verts, const int numVerts, const int *indexes, const int numIndexes ) = 0;
-    virtual void VPCALL DeriveTriPlanes( idPlane *planes, const idDrawVert *verts, const int numVerts, const short *indexes, const int numIndexes ) = 0;
 	virtual void VPCALL DeriveTangents( idPlane *planes, idDrawVert *verts, const int numVerts, const int *indexes, const int numIndexes ) = 0;
-    virtual void VPCALL DeriveTangents( idPlane *planes, idDrawVert *verts, const int numVerts, const short *indexes, const int numIndexes ) = 0;
 	virtual void VPCALL DeriveUnsmoothedTangents( idDrawVert *verts, const dominantTri_s *dominantTris, const int numVerts ) = 0;
 	virtual void VPCALL NormalizeTangents( idDrawVert *verts, const int numVerts ) = 0;
 	virtual void VPCALL CreateTextureSpaceLightVectors( idVec3 *lightVectors, const idVec3 &lightOrigin, const idDrawVert *verts, const int numVerts, const int *indexes, const int numIndexes ) = 0;
-    virtual void VPCALL CreateTextureSpaceLightVectors( idVec3 *lightVectors, const idVec3 &lightOrigin, const idDrawVert *verts, const int numVerts, const short *indexes, const int numIndexes ) = 0;
-    #if 0
 	virtual void VPCALL CreateSpecularTextureCoords( idVec4 *texCoords, const idVec3 &lightOrigin, const idVec3 &viewOrigin, const idDrawVert *verts, const int numVerts, const int *indexes, const int numIndexes ) = 0;
-    virtual void VPCALL CreateSpecularTextureCoords( idVec4 *texCoords, const idVec3 &lightOrigin, const idVec3 &viewOrigin, const idDrawVert *verts, const int numVerts, const short *indexes, const int numIndexes ) = 0;
-    #endif
 	virtual int  VPCALL CreateShadowCache( idVec4 *vertexCache, int *vertRemap, const idVec3 &lightOrigin, const idDrawVert *verts, const int numVerts ) = 0;
 	virtual int  VPCALL CreateVertexProgramShadowCache( idVec4 *vertexCache, const idDrawVert *verts, const int numVerts ) = 0;
 
@@ -210,17 +203,5 @@ public:
 
 // pointer to SIMD processor
 extern idSIMDProcessor *SIMDProcessor;
-
-ID_INLINE void VPCALL idSIMDProcessor::Memcpy( void *dst, const void *src, const int count ) {
-	memcpy( dst, src, count );
-}
-
-ID_INLINE void VPCALL idSIMDProcessor::Memset( void *dst, const int val, const int count ) {
-	memset( dst, val, count );
-}
-
-ID_INLINE void VPCALL idSIMDProcessor::Zero16( float *dst, const int count ) {
-	memset( dst, 0, count * sizeof( float ) );
-}
 
 #endif /* !__MATH_SIMD_H__ */

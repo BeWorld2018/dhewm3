@@ -713,7 +713,7 @@ idScreenRect idInteraction::CalcInteractionScissorRectangle( const idFrustum &vi
 		scissorRect.Clear();
 		return scissorRect;
 	}
-	
+
 	// calculate scissors for the portals through which the interaction is visible
 	if ( r_useInteractionScissors.GetInteger() > 1 ) {
 		areaNumRef_t *area;
@@ -1101,7 +1101,7 @@ void idInteraction::AddActiveInteraction( void ) {
 
 	bool lightScissorsEmpty = lightScissor.IsEmpty();
     bool needLightingCache = r_useTripleTextureARB.GetBool(); // Cowcat
-    
+
 	// for each surface of this entity / light interaction
 	for ( int i = 0; i < numSurfaces; i++ ) {
 		surfaceInteraction_t *sint = &surfaces[i];
@@ -1140,8 +1140,8 @@ void idInteraction::AddActiveInteraction( void ) {
 					// touch the ambient surface so it won't get purged
 					vertexCache.Touch( lightTris->ambientCache );
 
-                    if ( needLightingCache ) // Cowcat
-                    {
+          if ( needLightingCache ) // Cowcat
+          {
 					    // regenerate the lighting cache (for non-vertex program cards) if it has been purged
 					    if ( !lightTris->lightingCache ) {
 						    if ( !R_CreateLightingCache( entityDef, lightDef, lightTris ) ) {
@@ -1155,8 +1155,8 @@ void idInteraction::AddActiveInteraction( void ) {
 					        //common->Printf( "TouchLightingCache\n");
 						    vertexCache.Touch( lightTris->lightingCache );
 					    }
-                    }
-                    
+          }
+
 					if ( !lightTris->indexCache && r_useIndexBuffers.GetBool() ) {
 						vertexCache.Alloc( lightTris->indexes, lightTris->numIndexes * sizeof( lightTris->indexes[0] ), &lightTris->indexCache, true );
 					}

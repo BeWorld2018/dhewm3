@@ -26,7 +26,12 @@ If you have questions concerning this license or the applicable additional terms
 ===========================================================================
 */
 
-#include <SDL.h>
+#include "sys/sys_sdl.h"
+
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+  // DG: compat with SDL2
+  #define SDL_setenv SDL_setenv_unsafe
+#endif
 
 #include "sys/platform.h"
 #include "idlib/containers/HashTable.h"
@@ -50,6 +55,8 @@ If you have questions concerning this license or the applicable additional terms
 #include "tools/compilers/aas/AASFileManager.h"
 #include "tools/edit_public.h"
 
+#include "sys/sys_imgui.h"
+
 #include "framework/Common.h"
 
 #include "GameCallbacks_local.h"
@@ -57,6 +64,9 @@ If you have questions concerning this license or the applicable additional terms
 
 #define	MAX_PRINT_MSG_SIZE	4096
 #define MAX_WARNING_LIST	256
+
+// DG: implemented in Dhewm3SettingsMenu.cpp (the only Com_*_f() function not implemented in this file)
+extern void Com_Dhewm3Settings_f( const idCmdArgs &args );
 
 typedef enum {
 	ERP_NONE,
@@ -72,7 +82,7 @@ typedef enum {
 #endif
 
 struct version_s {
-			version_s( void ) { sprintf( string, "%s.%d%s %s-%s %s %s", ENGINE_VERSION, BUILD_NUMBER, BUILD_DEBUG, BUILD_OS, BUILD_CPU, ID__DATE__, ID__TIME__ ); }
+			version_s( void ) { sprintf( string, "%s.%d%s %s-%s %s %s", ENGINE_VERSION, BUILD_NUMBER, BUILD_DEBUG, BUILD_OS, D3_ARCH, ID__DATE__, ID__TIME__ ); }
 	char	string[256];
 } version;
 
@@ -394,7 +404,7 @@ void idCommonLocal::VPrintf( const char *fmt, va_list args ) {
 		if ( com_editors & EDITOR_DEBUGGER )
 			DebuggerServerPrint( msg );
 		else
-			// only echo to dedicated console and early console when debugger is not running so no 
+			// only echo to dedicated console and early console when debugger is not running so no
 			// deadlocks occur if engine functions called from the debuggerthread trace stuff..
 			Sys_Printf( "%s", msg );
 	} else {
@@ -1145,7 +1155,7 @@ Com_ScriptDebugger_f
 static void Com_ScriptDebugger_f( const idCmdArgs &args ) {
 	// Make sure it wasnt on the command line
 	if ( !( com_editors & EDITOR_DEBUGGER ) ) {
-		
+
 		//start debugger server if needed
 		if ( !com_enableDebuggerServer.GetBool() )
 			com_enableDebuggerServer.SetBool( true );
@@ -1407,8 +1417,11 @@ void OSX_GetVideoCard( int& outVendorId, int& outDeviceId );
 bool OSX_GetCPUIdentification( int& cpuId, bool& oldArchitecture );
 #endif
 void Com_ExecMachineSpec_f( const idCmdArgs &args ) {
-	if ( com_machineSpec.GetInteger() == 3 ) {
-		cvarSystem->SetCVarInteger( "image_anisotropy", 1, CVAR_ARCHIVE );
+	// DG: add an optional "nores" argument for "don't change the resolution" (r_mode)
+	bool nores = args.Argc() > 1 && idStr::Icmp( args.Argv(1), "nores" ) == 0;
+	cvarSystem->SetCVarInteger( "r_useSoftParticles", 0, CVAR_ARCHIVE ); // DG: disable soft particles for all but ultra
+	if ( com_machineSpec.GetInteger() == 3 ) { // ultra
+		//cvarSystem->SetCVarInteger( "image_anisotropy", 1, CVAR_ARCHIVE ); DG: redundant, set again below
 		cvarSystem->SetCVarInteger( "image_lodbias", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_forceDownSize", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_roundDown", 1, CVAR_ARCHIVE );
@@ -1425,12 +1438,14 @@ void Com_ExecMachineSpec_f( const idCmdArgs &args ) {
 		cvarSystem->SetCVarInteger( "image_useCompression", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_ignoreHighQuality", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "s_maxSoundsPerShader", 0, CVAR_ARCHIVE );
-		cvarSystem->SetCVarInteger( "r_mode", 5, CVAR_ARCHIVE );
+		if ( !nores ) // DG: added optional "nores" argument
+			cvarSystem->SetCVarInteger( "r_mode", 5, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_useNormalCompression", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "r_multiSamples", 0, CVAR_ARCHIVE );
-	} else if ( com_machineSpec.GetInteger() == 2 ) {
+		cvarSystem->SetCVarInteger( "r_useSoftParticles", 1, CVAR_ARCHIVE ); // DG: enable soft particles for ultra preset
+	} else if ( com_machineSpec.GetInteger() == 2 ) { // high
 		cvarSystem->SetCVarString( "image_filter", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE );
-		cvarSystem->SetCVarInteger( "image_anisotropy", 1, CVAR_ARCHIVE );
+		//cvarSystem->SetCVarInteger( "image_anisotropy", 1, CVAR_ARCHIVE ); DG: redundant, set again below
 		cvarSystem->SetCVarInteger( "image_lodbias", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_forceDownSize", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_roundDown", 1, CVAR_ARCHIVE );
@@ -1447,9 +1462,10 @@ void Com_ExecMachineSpec_f( const idCmdArgs &args ) {
 		cvarSystem->SetCVarInteger( "image_ignoreHighQuality", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "s_maxSoundsPerShader", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_useNormalCompression", 0, CVAR_ARCHIVE );
-		cvarSystem->SetCVarInteger( "r_mode", 4, CVAR_ARCHIVE );
+		if ( !nores ) // DG: added optional "nores" argument
+			cvarSystem->SetCVarInteger( "", 4, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "r_multiSamples", 0, CVAR_ARCHIVE );
-	} else if ( com_machineSpec.GetInteger() == 1 ) {
+	} else if ( com_machineSpec.GetInteger() == 1 ) { // medium
 		cvarSystem->SetCVarString( "image_filter", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_anisotropy", 1, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_lodbias", 0, CVAR_ARCHIVE );
@@ -1465,9 +1481,10 @@ void Com_ExecMachineSpec_f( const idCmdArgs &args ) {
 		cvarSystem->SetCVarInteger( "image_downSizeSpecularLimit", 64, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_downSizeBumpLimit", 256, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_useNormalCompression", 2, CVAR_ARCHIVE );
-		cvarSystem->SetCVarInteger( "r_mode", 3, CVAR_ARCHIVE );
+		if ( !nores ) // DG: added optional "nores" argument
+			cvarSystem->SetCVarInteger( "r_mode", 3, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "r_multiSamples", 0, CVAR_ARCHIVE );
-	} else {
+	} else { // low
 		cvarSystem->SetCVarString( "image_filter", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_anisotropy", 1, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_lodbias", 0, CVAR_ARCHIVE );
@@ -1484,7 +1501,8 @@ void Com_ExecMachineSpec_f( const idCmdArgs &args ) {
 		cvarSystem->SetCVarInteger( "image_downSizeBump", 1, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_downSizeSpecularLimit", 64, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_downSizeBumpLimit", 256, CVAR_ARCHIVE );
-		cvarSystem->SetCVarInteger( "r_mode", 3	, CVAR_ARCHIVE );
+		if ( !nores ) // DG: added optional "nores" argument
+			cvarSystem->SetCVarInteger( "r_mode", 3	, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_useNormalCompression", 2, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "r_multiSamples", 0, CVAR_ARCHIVE );
 	}
@@ -2300,6 +2318,8 @@ void idCommonLocal::InitCommands( void ) {
 	cmdSystem->AddCommand( "setMachineSpec", Com_SetMachineSpec_f, CMD_FL_SYSTEM, "detects system capabilities and sets com_machineSpec to appropriate value" );
 	cmdSystem->AddCommand( "execMachineSpec", Com_ExecMachineSpec_f, CMD_FL_SYSTEM, "execs the appropriate config files and sets cvars based on com_machineSpec" );
 
+	cmdSystem->AddCommand( "dhewm3Settings", Com_Dhewm3Settings_f, CMD_FL_SYSTEM, "Toggles (opens/closes) the (advanced) dhewm3 settings menu" );
+
 #if	!defined( ID_DEDICATED )
 	// compilers
 	cmdSystem->AddCommand( "dmap", Dmap_f, CMD_FL_TOOL, "compiles a map", idCmdSystem::ArgCompletion_MapName );
@@ -2425,6 +2445,9 @@ void idCommonLocal::Frame( void ) {
 		}
 
 		eventLoop->RunEventLoop();
+
+		// DG: prepare new ImGui frame - I guess this is a good place, as all new events should be available?
+		D3::ImGuiHooks::NewFrame();
 
 		com_frameTime = com_ticNumber * USERCMD_MSEC;
 
@@ -2621,6 +2644,13 @@ void idCommonLocal::LoadGameDLLbyName( const char *dll, idStr& s ) {
 			s.AppendPath(dll);
 			gameDLL = sys->DLL_Load(s);
 		}
+
+		// if not found in the bundle's directory, try in the bundle itself
+		if (!gameDLL && Sys_GetPath(PATH_EXE, s)) {
+			s.AppendPath("Contents/MacOS/base");
+			s.AppendPath(dll);
+			gameDLL = sys->DLL_Load(s);
+		}
 	#else
 		// then the install folder on *nix
 		if (!gameDLL) {
@@ -2658,13 +2688,27 @@ void idCommonLocal::LoadGameDLL( void ) {
 	// there was no gamelib for this mod, use default one from base game
 	if (!gameDLL) {
 		common->Printf( "\n" );
-		common->Warning( "couldn't load mod-specific %s, defaulting to base game's library!\n", dll );
-		sys->DLL_GetFileName(BASE_GAMEDIR, dll, sizeof(dll));
-		LoadGameDLLbyName(dll, s);
+
+		const char *fs_base = cvarSystem->GetCVarString("fs_game_base");
+		if (fs_base && fs_base[0]) {
+			common->Warning( "couldn't load mod-specific %s, defaulting to library of fs_game_base (%s)!\n", dll, fs_base);
+			sys->DLL_GetFileName(fs_base, dll, sizeof(dll));
+			LoadGameDLLbyName(dll, s);
+			if ( !gameDLL ) {
+				common->Warning( "couldn't load fs_game_base lib %s either, defaulting to base game's library!\n", dll);
+			}
+		} else {
+			common->Warning( "couldn't load mod-specific %s, defaulting to base game's library!\n", dll );
+		}
+
+		if ( !gameDLL ) {
+			sys->DLL_GetFileName(BASE_GAMEDIR, dll, sizeof(dll));
+			LoadGameDLLbyName(dll, s);
+		}
 	}
 
 	if ( !gameDLL ) {
-		common->FatalError( "couldn't load game dynamic library" );
+		common->FatalError( "couldn't load game dynamic library '%s'", dll );
 		return;
 	}
 
@@ -2774,7 +2818,12 @@ void idCommonLocal::SetMachineSpec( void ) {
 	}
 }
 
-static unsigned int AsyncTimer(unsigned int interval, void *) {
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+static Uint32 AsyncTimer(void * /*userdata*/, SDL_TimerID /* timerID */, Uint32 interval)
+#else // SDL2 or SDL1.2
+static unsigned int AsyncTimer(unsigned int interval, void *)
+#endif
+{
 	common->Async();
 	Sys_TriggerEvent(TRIGGER_EVENT_ONE);
 
@@ -2842,6 +2891,9 @@ static bool checkForHelp(int argc, char **argv)
 				WriteString("  set path to your Doom3 game data (the directory base/ is in)\n");
 				WriteString("+set fs_game <modname>\n");
 				WriteString("  start the given addon/mod, e.g. +set fs_game d3xp\n");
+				WriteString("+set fs_game_base <base-modname>\n");
+				WriteString("  some mods are based on other mods, usually d3xp.\n");
+				WriteString("  This specifies the base mod e.g. +set fs_game d3le +set fs_game_base d3xp\n");
 #ifndef ID_DEDICATED
 				WriteString("+set r_fullscreen <0 or 1>\n");
 				WriteString("  start game in windowed (0) or fullscreen (1) mode\n");
@@ -2911,7 +2963,9 @@ void idCommonLocal::Init( int argc, char **argv ) {
 	// we want to use the SDL event queue for dedicated servers. That
 	// requires video to be initialized, so we just use the dummy
 	// driver for headless boxen
-#if SDL_VERSION_ATLEAST(2, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
+#elif SDL_VERSION_ATLEAST(2, 0, 0)
 	SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
 #else
 	char dummy[] = "SDL_VIDEODRIVER=dummy\0";
@@ -2919,8 +2973,26 @@ void idCommonLocal::Init( int argc, char **argv ) {
 #endif
 #endif
 
-	if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_JOYSTICK)) // init joystick to work around SDL 2.0.9 bug #4391
-		Sys_Error("Error while initializing SDL: %s", SDL_GetError());
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	if ( ! SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD) )
+	{
+		if ( SDL_Init(SDL_INIT_VIDEO) ) { // retry without joystick/gamepad if it failed
+			Sys_Printf( "WARNING: Couldn't get SDL gamepad support! Gamepads won't work!\n" );
+		} else
+#elif SDL_VERSION_ATLEAST(2, 0, 0)
+	if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) != 0)
+	{
+		if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO) == 0) { // retry without joystick/gamecontroller if it failed
+			Sys_Printf( "WARNING: Couldn't get SDL gamecontroller support! Gamepads won't work!\n" );
+		} else
+#else // SDL1.2
+	if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO) != 0) // no gamecontroller support in SDL1
+	{
+#endif
+		{
+			Sys_Error("Error while initializing SDL: %s", SDL_GetError());
+		}
+	}
 
 	Sys_InitThreads();
 
@@ -2965,14 +3037,22 @@ void idCommonLocal::Init( int argc, char **argv ) {
 		idCVar::RegisterStaticVars();
 
 		// print engine version
-#if SDL_VERSION_ATLEAST(2, 0, 0)
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		int sdlv = SDL_GetVersion();
+		int sdlvmaj = SDL_VERSIONNUM_MAJOR(sdlv);
+		int sdlvmin = SDL_VERSIONNUM_MINOR(sdlv);
+		int sdlvmicro = SDL_VERSIONNUM_MICRO(sdlv);
+		Printf( "%s using SDL v%d.%d.%d\n", version.string, sdlvmaj, sdlvmin, sdlvmicro );
+#else
+  #if SDL_VERSION_ATLEAST(2, 0, 0)
 		SDL_version sdlv;
 		SDL_GetVersion(&sdlv);
-#else
+  #else
 		SDL_version sdlv = *SDL_Linked_Version();
-#endif
+  #endif
 		Printf( "%s using SDL v%u.%u.%u\n",
 				version.string, sdlv.major, sdlv.minor, sdlv.patch );
+#endif
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 		Printf( "SDL video driver: %s\n", SDL_GetCurrentVideoDriver() );
@@ -3229,7 +3309,11 @@ void idCommonLocal::InitGame( void ) {
 	if ( sysDetect ) {
 		SetMachineSpec();
 		Com_ExecMachineSpec_f( args );
-		cvarSystem->SetCVarInteger( "s_numberOfSpeakers", 2 );
+#ifdef __MORPHOS__
+    cvarSystem->SetCVarInteger( "s_numberOfSpeakers", 2 );
+#else
+*		cvarSystem->SetCVarInteger( "s_numberOfSpeakers", 6 );
+#endif
 		cmdSystem->BufferCommandText( CMD_EXEC_NOW, "s_restart\n" );
 		cmdSystem->ExecuteCommandBuffer();
 	}
@@ -3249,7 +3333,7 @@ void idCommonLocal::ShutdownGame( bool reloading ) {
 	}
 
 	// shutdown the script debugger
-	if ( com_enableDebuggerServer.GetBool() )	
+	if ( com_enableDebuggerServer.GetBool() )
 		DebuggerServerShutdown();
 
 	idAsyncNetwork::client.Shutdown();
@@ -3320,7 +3404,7 @@ static bool isDemo( void )
 
 static bool updateDebugger( idInterpreter *interpreter, idProgram *program, int instructionPointer )
 {
-	if (com_editors & EDITOR_DEBUGGER) 
+	if (com_editors & EDITOR_DEBUGGER)
 	{
 		DebuggerServerCheckBreakpoint( interpreter, program, instructionPointer );
 		return true;

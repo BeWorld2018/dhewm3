@@ -811,7 +811,7 @@ void myGlMultMatrix( const float a[16], const float b[16], float out[16] ) {
 	out[3*4+2] = a[3*4+0]*b[0*4+2] + a[3*4+1]*b[1*4+2] + a[3*4+2]*b[2*4+2] + a[3*4+3]*b[3*4+2];
 	out[3*4+3] = a[3*4+0]*b[0*4+3] + a[3*4+1]*b[1*4+3] + a[3*4+2]*b[2*4+3] + a[3*4+3]*b[3*4+3];
     */
-    
+
     // Cowcat
     int	i, j;
 

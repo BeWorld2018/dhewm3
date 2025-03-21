@@ -60,6 +60,8 @@ idCVar	idSessionLocal::com_guid( "com_guid", "", CVAR_SYSTEM | CVAR_ARCHIVE | CV
 
 idCVar	idSessionLocal::com_numQuicksaves( "com_numQuicksaves", "4", CVAR_SYSTEM|CVAR_ARCHIVE|CVAR_INTEGER,
                                            "number of quicksaves to keep before overwriting the oldest", 1, 99 );
+idCVar	idSessionLocal::com_disableAutoSaves( "com_disableAutoSaves", "0", CVAR_SYSTEM|CVAR_ARCHIVE|CVAR_BOOL,
+                                              "Don't create Autosaves when entering a new map" );
 
 idSessionLocal		sessLocal;
 idSession			*session = &sessLocal;
@@ -108,6 +110,13 @@ static void Session_Map_f( const idCmdArgs &args ) {
 
 	map = args.Argv(1);
 	if ( !map.Length() ) {
+		// DG: if the map command is called without any arguments, print the current map
+		// TODO: could check whether we're currently in a game, otherwise the last loaded
+		//       map is printed.. but OTOH, who cares
+		const char* curmap = sessLocal.mapSpawnData.serverInfo.GetString( "si_map" );
+		if ( curmap[0] != '\0' ) {
+			common->Printf( "Current Map: %s\n", curmap );
+		}
 		return;
 	}
 	map.StripFileExtension();
@@ -373,7 +382,11 @@ idSessionLocal::idSessionLocal
 idSessionLocal::idSessionLocal() {
 	guiInGame = guiMainMenu = guiIntro \
 		= guiRestartMenu = guiLoading = guiGameOver = guiActive \
+#ifdef __MORPHOS__
 		= guiTest = guiMsg = guiMsgRestore = /*guiTakeNotes =*/ NULL;
+#else
+		= guiTest = guiMsg = guiMsgRestore = guiTakeNotes = NULL;
+#endif
 
 	menuSoundWorld = NULL;
 
@@ -1239,8 +1252,8 @@ void idSessionLocal::MoveToNewMap( const char *mapName ) {
 
 	ExecuteMapChange();
 
-	if ( !mapSpawnData.serverInfo.GetBool("devmap") ) {
-		// Autosave at the beginning of the level
+	if ( !com_disableAutoSaves.GetBool() && !mapSpawnData.serverInfo.GetBool("devmap") ) {
+		// Autosave at the beginning of the level - DG: unless disabled with "com_disableAutoSaves 1"
 
 		// DG: set an explicit savename to avoid problems with autosave names
 		//     (they were translated which caused problems like all alpha labs parts
@@ -1447,6 +1460,9 @@ void idSessionLocal::UnloadMap() {
 	}
 
 	mapSpawned = false;
+
+	// DG: that state needs to be reset now
+	Sys_SetInteractiveIngameGuiActive( false, NULL );
 }
 
 /*
@@ -2122,8 +2138,7 @@ bool idSessionLocal::LoadGame( const char *saveName ) {
 	// check the version, if it doesn't match, cancel the loadgame,
 	// but still load the map with the persistant playerInfo from the header
 	// so that the player doesn't lose too much progress.
-	if ( savegameVersion != SAVEGAME_VERSION &&
-		 !( savegameVersion == 16 && SAVEGAME_VERSION == 17 ) ) {	// handle savegame v16 in v17
+	if ( savegameVersion < 16 || savegameVersion > SAVEGAME_VERSION ) { // dhewm3 supports savegames with v16 - v18
 		common->Warning( "Savegame Version mismatch: aborting loadgame and starting level with persistent data" );
 		loadingSaveGame = false;
 		fileSystem->CloseFile( savegameFile );
@@ -2638,6 +2653,7 @@ idSessionLocal::Frame
 ===============
 */
 extern bool CheckOpenALDeviceAndRecoverIfNeeded();
+extern int g_screenshotFormat;
 void idSessionLocal::Frame() {
 
 	if ( com_asyncSound.GetInteger() == 0 ) {
@@ -2676,6 +2692,7 @@ void idSessionLocal::Frame() {
 			// skipped frames so write them out
 			int c = aviDemoFrameCount - aviTicStart;
 			while ( c-- ) {
+				g_screenshotFormat = 0;
 				renderSystem->TakeScreenshot( com_aviDemoWidth.GetInteger(), com_aviDemoHeight.GetInteger(), name, com_aviDemoSamples.GetInteger(), NULL );
 				name = va("demos/%s/%s_%05i.tga", aviDemoShortName.c_str(), aviDemoShortName.c_str(), ++aviTicStart );
 			}
@@ -2686,6 +2703,7 @@ void idSessionLocal::Frame() {
 		console->ClearNotifyLines();
 
 		// this will call Draw, possibly multiple times if com_aviDemoSamples is > 1
+		g_screenshotFormat = 0;
 		renderSystem->TakeScreenshot( com_aviDemoWidth.GetInteger(), com_aviDemoHeight.GetInteger(), name, com_aviDemoSamples.GetInteger(), NULL );
 	}
 
@@ -2892,8 +2910,8 @@ void idSessionLocal::RunGameTic() {
 		lastGameTic++;
 	}
 
-    gameReturn_t    ret;
-    
+  gameReturn_t    ret;
+
 	// run the game logic every player move
 	if ( com_speeds.GetBool() ) { // Cowcat
 	    int	start = Sys_Milliseconds();
@@ -3007,11 +3025,11 @@ void idSessionLocal::Init() {
 	cmdSystem->AddCommand( "loadGame", LoadGame_f, CMD_FL_SYSTEM|CMD_FL_CHEAT, "loads a game", idCmdSystem::ArgCompletion_SaveGame );
 #endif
 
-    #if 0
+#if 0
 	cmdSystem->AddCommand( "takeViewNotes", TakeViewNotes_f, CMD_FL_SYSTEM, "take notes about the current map from the current view" );
 	cmdSystem->AddCommand( "takeViewNotes2", TakeViewNotes2_f, CMD_FL_SYSTEM, "extended take view notes" );
-    #endif
-    
+#endif
+
 	cmdSystem->AddCommand( "rescanSI", Session_RescanSI_f, CMD_FL_SYSTEM, "internal - rescan serverinfo cvars and tell game" );
 
 	cmdSystem->AddCommand( "promptKey", Session_PromptKey_f, CMD_FL_SYSTEM, "prompt and sets the CD Key" );

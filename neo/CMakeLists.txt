@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+cmake_minimum_required(VERSION 2.6...3.22 FATAL_ERROR)
 project(dhewm3)
 
 # TODO
@@ -46,17 +46,33 @@ set(DHEWM3BINARY "dhewm3")
 
 include(CheckCXXCompilerFlag)
 include(GNUInstallDirs OPTIONAL RESULT_VARIABLE GNUINSTALLDIRS)
+include(TestBigEndian)
 
 option(CORE			"Build the core" ON)
 option(BASE			"Build the base game code" ON)
 option(D3XP			"Build the d3xp game code" ON)
 if(MSVC)
-	option(TOOLS		"Build the tools game code (Visual Studio+SDL2 only)" OFF)
+	option(TOOLS		"Build the tools game code (Visual Studio+SDL2/SDL3 only)" OFF)
 endif()
 option(DEDICATED	"Build the dedicated server" OFF)
 option(ONATIVE		"Optimize for the host CPU" OFF)
 option(SDL2			"Use SDL2 instead of SDL1.2" ON)
+option(SDL3			"Use SDL3 instead of SDL2 or SDL1.2" OFF)
+option(IMGUI		"Build with Dear ImGui integration - requires SDL2/SDL3 and C++11" ON)
 option(REPRODUCIBLE_BUILD "Replace __DATE__ and __TIME__ by hardcoded values for reproducible builds" OFF)
+
+option(HARDLINK_GAME "Compile gamecode into executable (no game DLLs)" OFF)
+
+if(NOT MSVC) # GCC/clang or compatible, hopefully
+	option(FORCE_COLORED_OUTPUT "Always produce ANSI-colored compiler warnings/errors (GCC/Clang only; esp. useful with ninja)." OFF)
+	option(ASAN		"Enable GCC/Clang Adress Sanitizer (ASan)" OFF) # TODO: MSVC might also support this, somehow?
+	option(UBSAN	"Enable GCC/Clang Undefined Behavior Sanitizer (UBSan), implies HARDLINK_GAME" OFF)
+
+	if(UBSAN AND NOT HARDLINK_GAME)
+		message(STATUS "UBSAN requires linking the gamecode into the executable, will enable HARDLINK_GAME")
+		set(HARDLINK_GAME ON)
+	endif()
+endif()
 
 if(NOT CMAKE_SYSTEM_PROCESSOR)
 	message(FATAL_ERROR "No target CPU architecture set")
@@ -80,21 +96,9 @@ if(NOT (CMAKE_SYSTEM_PROCESSOR STREQUAL CMAKE_HOST_SYSTEM_PROCESSOR))
 	# special case: cross-compiling, here CMAKE_SYSTEM_PROCESSOR should be correct, hopefully
 	# (just leave cpu at ${CMAKE_SYSTEM_PROCESSOR})
 elseif(MSVC)
-	message(STATUS "CMAKE_GENERATOR_PLATFORM: ${CMAKE_GENERATOR_PLATFORM}")
-	if(CMAKE_GENERATOR_PLATFORM STREQUAL "Win32")
-		set(cpu "x86")
-	elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "x64")
-		set(cpu "x86_64")
-	elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "ARM")
-		# at least on RPi 32bit, gcc -dumpmachine outputs "arm-linux-gnueabihf",
-		#  so we'll use "arm" there => use the same for 32bit ARM on MSVC
-		set(cpu "arm")
-	elseif(CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
-		set(cpu "arm64")
-	else()
-		message(FATAL_ERROR "Unknown Target CPU/platform ${CMAKE_GENERATOR_PLATFORM}")
-	endif()
-	message(STATUS "  => CPU architecture extracted from that: \"${cpu}\"")
+	# because all this wasn't ugly enough, it turned out that, unlike standalone CMake, Visual Studio's
+	# integrated CMake doesn't set CMAKE_GENERATOR_PLATFORM, so I gave up on guessing the CPU arch here
+	# and moved the CPU detection to MSVC-specific code in neo/sys/platform.h
 else() # not MSVC and not cross-compiling, assume GCC or clang (-compatible), seems to work for MinGW as well
 	execute_process(COMMAND ${CMAKE_C_COMPILER} "-dumpmachine"
 	                RESULT_VARIABLE cc_dumpmachine_res
@@ -132,8 +136,6 @@ elseif(cpu MATCHES "[aA][rR][mM].*") # some kind of arm..
 	endif()
 endif()
 
-add_definitions(-DD3_ARCH="${cpu}" -DD3_SIZEOFPTR=${CMAKE_SIZEOF_VOID_P})
-
 # target os
 if(APPLE)
 	set(os "macosx")
@@ -141,14 +143,22 @@ else()
 	string(TOLOWER "${CMAKE_SYSTEM_NAME}" os)
 endif()
 
-add_definitions(-DD3_OSTYPE="${os}")
+add_definitions(-DD3_OSTYPE="${os}" -DD3_SIZEOFPTR=${CMAKE_SIZEOF_VOID_P})
 
-message(STATUS "Setting -DD3_ARCH=\"${cpu}\" -DD3_SIZEOFPTR=${CMAKE_SIZEOF_VOID_P} -DD3_OSTYPE=\"${os}\" ")
+if(MSVC)
+	# for MSVC D3_ARCH is set in code (in neo/sys/platform.h)
+	message(STATUS "Setting -DD3_SIZEOFPTR=${CMAKE_SIZEOF_VOID_P} -DD3_OSTYPE=\"${os}\" - NOT setting D3_ARCH, because we're targeting MSVC (VisualC++)")
+	# make sure ${cpu} isn't (cant't be) used by CMake when building with MSVC
+	unset(cpu)
+else()
+	add_definitions(-DD3_ARCH="${cpu}")
+	message(STATUS "Setting -DD3_ARCH=\"${cpu}\" -DD3_SIZEOFPTR=${CMAKE_SIZEOF_VOID_P} -DD3_OSTYPE=\"${os}\" ")
 
-if(cpu MATCHES ".*64.*" AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-	# tough luck if some CPU architecture has "64" in its name but uses 32bit pointers
-	message(SEND_ERROR "CMake thinks sizeof(void*) == 4, but the target CPU looks like a 64bit CPU!")
-	message(FATAL_ERROR "If you're building in a 32bit chroot on a 64bit host, switch to it with 'linux32 chroot' or at least call cmake with linux32 (or your OSs equivalent)!")
+	if(cpu MATCHES ".*64.*" AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+		# tough luck if some CPU architecture has "64" in its name but uses 32bit pointers
+		message(SEND_ERROR "CMake thinks sizeof(void*) == 4, but the target CPU ${cpu} looks like a 64bit CPU!")
+		message(FATAL_ERROR "If you're building in a 32bit chroot on a 64bit host, switch to it with 'linux32 chroot' or at least call cmake with linux32 (or your OSs equivalent)!")
+	endif()
 endif()
 
 # build type
@@ -182,13 +192,22 @@ if(CMAKE_MAJOR_VERSION LESS 3 OR ( CMAKE_MAJOR_VERSION EQUAL 3 AND CMAKE_MINOR_V
 endif()
 
 # libs
-find_package(ZLIB REQUIRED)
-include_directories(${ZLIB_INCLUDE_DIRS})
-
 find_package(OpenAL REQUIRED)
 include_directories(${OPENAL_INCLUDE_DIR})
 
-if (SDL2)
+if (SDL3)
+	if(SDL2)
+		message(WARNING "You enabled both SDL2 and SDL3. Only one can be used at a time, disabling SDL2")
+		set(SDL2 OFF CACHE BOOL "Use SDL2 (make sure SDL3 is disabled!)" FORCE)
+	endif()
+	# 1. Look for a SDL3 package,
+	# 2. look for the SDL3-shared component, and
+	# 3. fail if the shared component cannot be found.
+	find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)
+	# TODO: include dirs?
+	set(SDLx_LIBRARY SDL3::SDL3)
+	add_definitions(-DD3_SDL3=1)
+elseif (SDL2)
 	# skip SDL2main
 	if(APPLE OR WIN32)
 		set(SDL2_BUILDING_LIBRARY TRUE)
@@ -211,6 +230,20 @@ if(REPRODUCIBLE_BUILD)
 	add_definitions(-DID_REPRODUCIBLE_BUILD)
 endif()
 
+if(IMGUI)
+	if(SDL2 OR SDL3)
+		# we need C++11 for ImGui
+		set (CMAKE_CXX_STANDARD 11)
+		message(STATUS "Dear ImGui integration enabled")
+	else()
+		message(WARNING "Disabling IMGUI because SDL1.2 is used - it needs SDL2 or SDL3!")
+		set(IMGUI OFF)
+		add_definitions(-DIMGUI_DISABLE)
+	endif()
+else()
+	message(STATUS "Dear ImGui integration disabled")
+	add_definitions(-DIMGUI_DISABLE)
+endif()
 
 find_package(CURL QUIET)
 if(CURL_FOUND)
@@ -222,6 +255,9 @@ else()
 	set(ID_ENABLE_CURL OFF)
 	set(CURL_LIBRARY "")
 endif()
+
+set(D3_COMPILER_IS_CLANG FALSE)
+set(D3_COMPILER_IS_GCC_OR_CLANG FALSE)
 
 if(MSVC)
 	# This is required for tools on windows.
@@ -251,10 +287,31 @@ if(NOT WIN32)
 	endif()
 endif() # NOT WIN32
 
+# check if this is some kind of clang (Clang, AppleClang, whatever)
+# (convert compiler ID to lowercase so we match Clang, clang, AppleClang etc, regardless of case)
+string(TOLOWER ${CMAKE_CXX_COMPILER_ID} compiler_id_lower)
+if(compiler_id_lower MATCHES ".*clang.*")
+	message(STATUS "Compiler \"${CMAKE_CXX_COMPILER_ID}\" detected as some kind of clang")
+	set(D3_COMPILER_IS_CLANG TRUE)
+	set(D3_COMPILER_IS_GCC_OR_CLANG TRUE)
+elseif(CMAKE_COMPILER_IS_GNUCC)
+	set(D3_COMPILER_IS_GCC_OR_CLANG TRUE)
+endif()
+unset(compiler_id_lower)
+
 endif() # not MSVC
 
+TEST_BIG_ENDIAN(is_big_endian)
+if(is_big_endian)
+	message(STATUS "Detected Big Endian architecture, setting -DD3_IS_BIG_ENDIAN=1")
+	add_definitions(-DD3_IS_BIG_ENDIAN=1)
+else()
+	message(STATUS "Detected Little Endian architecture, setting -DD3_IS_BIG_ENDIAN=0")
+	add_definitions(-DD3_IS_BIG_ENDIAN=0)
+endif()
+
 # compiler specific flags
-if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
+if(D3_COMPILER_IS_GCC_OR_CLANG)
 	add_compile_options(-pipe)
 	add_compile_options(-Wall)
 
@@ -264,12 +321,27 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
 		add_compile_options(-march=pentium3)
 	endif()
 
+	if(FORCE_COLORED_OUTPUT)
+		if(CMAKE_COMPILER_IS_GNUCC)
+		   add_compile_options (-fdiagnostics-color=always)
+		elseif (D3_COMPILER_IS_CLANG)
+		   add_compile_options (-fcolor-diagnostics)
+		endif ()
+	endif ()
+
+	if(cpu STREQUAL "e2k" AND CMAKE_COMPILER_IS_GNUCC)
+		# O3 on E2K mcst-lcc approximately equal to O2 at X86/ARM gcc
+		set(OPT_LEVEL "-O3")
+	else()
+		set(OPT_LEVEL "-O2")
+	endif()
+
 	set(CMAKE_C_FLAGS_DEBUG "-g -ggdb -D_DEBUG -O0")
 	set(CMAKE_C_FLAGS_DEBUGALL "-g -ggdb -D_DEBUG")
 	set(CMAKE_C_FLAGS_PROFILE "-g -ggdb -D_DEBUG -O1 -fno-omit-frame-pointer")
-	set(CMAKE_C_FLAGS_RELEASE "-O2 -fno-math-errno -fno-trapping-math -fomit-frame-pointer")
-	set(CMAKE_C_FLAGS_RELWITHDEBINFO "-g -ggdb -O2 -fno-math-errno -fno-trapping-math -fno-omit-frame-pointer")
-	set(CMAKE_C_FLAGS_MINSIZEREL "-Os -fno-math-errno -fno-trapping-math -fomit-frame-pointer")
+	set(CMAKE_C_FLAGS_RELEASE "${OPT_LEVEL} -fno-math-errno -fno-trapping-math  -ffinite-math-only -fomit-frame-pointer")
+	set(CMAKE_C_FLAGS_RELWITHDEBINFO "-g -ggdb ${OPT_LEVEL} -fno-math-errno -fno-trapping-math  -ffinite-math-only -fno-omit-frame-pointer")
+	set(CMAKE_C_FLAGS_MINSIZEREL "-Os -fno-math-errno -fno-trapping-math  -ffinite-math-only -fomit-frame-pointer")
 
 	set(CMAKE_CXX_FLAGS_DEBUGALL ${CMAKE_C_FLAGS_DEBUGALL})
 	set(CMAKE_CXX_FLAGS_PROFILE ${CMAKE_C_FLAGS_PROFILE})
@@ -277,7 +349,21 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
 	add_compile_options(-fno-strict-aliasing)
 	# dear idiot compilers, don't fuck up math code with useless FMA "optimizations"
 	# (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100839)
-	add_compile_options(-ffp-contract=off)
+	CHECK_CXX_COMPILER_FLAG("-ffp-contract=off" cxx_has_fp-contract)
+	if(cxx_has_fp-contract)
+		add_compile_options(-ffp-contract=off)
+	endif()
+	
+	if(ASAN)
+		# if this doesn't work, ASan might not be available on your platform, don't set ASAN then..
+		add_compile_options(-fsanitize=address)
+		set(sys_libs ${sys_libs} -fsanitize=address)
+	endif()
+	if(UBSAN)
+		# if this doesn't work, UBSan might not be available on your platform, don't set UBSAN then..
+		add_compile_options(-fsanitize=undefined)
+		set(sys_libs ${sys_libs} -fsanitize=undefined)
+	endif()
 
 	if(NOT AROS)
 		CHECK_CXX_COMPILER_FLAG("-fvisibility=hidden" cxx_has_fvisibility)
@@ -290,17 +376,23 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
 	# TODO fix these warnings
 	add_compile_options(-Wno-sign-compare)
 	add_compile_options(-Wno-switch)
-	add_compile_options(-Wno-format-security)
 
 	CHECK_CXX_COMPILER_FLAG("-Woverloaded-virtual" cxx_has_Woverload_virtual)
 	if(cxx_has_Woverload_virtual)
-		add_compile_options(-Woverloaded-virtual)
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual")
 	endif()
 	
 	# shut up about using memcpy() on classes, in the cases doom3 uses it it seems to be fine
 	CHECK_CXX_COMPILER_FLAG("-Wno-class-memaccess" cxx_has_Wno-class-memaccess)
 	if(cxx_has_Wno-class-memaccess)
-		add_compile_options(-Wno-class-memaccess)
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-class-memaccess")
+	endif()
+
+	# ignore warnings about variables named "requires" for now (in C++20 it's a keyword,
+	#  but currently we don't even use C++11 features)
+	CHECK_CXX_COMPILER_FLAG("-Wno-c++20-compat" cxx_has_Wno-cpp20-compat)
+	if(cxx_has_Wno-cpp20-compat)
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c++20-compat")
 	endif()
 
 	if(AROS)
@@ -310,11 +402,11 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
 		add_definitions(-DMACOS_X=1)
 
 		if(cpu STREQUAL "x86_64")
-			add_compile_options(-arch x86_64 -mmacosx-version-min=10.9)
-			set(ldflags "${ldflags} -arch x86_64 -mmacosx-version-min=10.9")
+			add_compile_options(-arch x86_64 -mmacosx-version-min=10.7)
+			set(ldflags "${ldflags} -arch x86_64 -mmacosx-version-min=10.7")
 		elseif(cpu STREQUAL "arm64")
-			add_compile_options(-arch arm64 -mmacosx-version-min=11.0)
-			set(ldflags "${ldflags} -arch arm64 -mmacosx-version-min=11.0")
+			add_compile_options(-arch arm64 -mmacosx-version-min=10.7)
+			set(ldflags "${ldflags} -arch arm64 -mmacosx-version-min=10.7")
 		elseif(cpu STREQUAL "x86")
 			CHECK_CXX_COMPILER_FLAG("-arch i386" cxx_has_arch_i386)
 			if(cxx_has_arch_i386)
@@ -339,7 +431,8 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
 
 		set(sys_libs ${sys_libs} "-framework Carbon -framework Cocoa -framework IOKit")
 	elseif(WIN32)
-		set(ldflags "${ldflags} -static-libgcc -static-libstdc++")
+		# use 8MB stack instead of 1MB, so big models don't overflow it with _alloca()
+		set(ldflags "${ldflags} -static-libgcc -static-libstdc++ -Wl,--stack,8388608")
 	elseif(os STREQUAL "linux")
 		set(sys_libs ${sys_libs} dl)
 	elseif(os STREQUAL "freebsd")
@@ -368,6 +461,8 @@ elseif(MSVC)
 	set(CMAKE_C_FLAGS_RELEASE "/Ox /Oy /MD")
 	set(CMAKE_C_FLAGS_RELWITHDEBINFO "/Ox /Oy /Zi /MD")
 	set(CMAKE_C_FLAGS_MINSIZEREL "/Ox /Oy /Os /MD")
+	# use 8MB stack instead of 1MB, so big models don't overflow it with _alloca()
+	set(ldflags "${ldflags} /STACK:8388608")
 else()
 	message(FATAL_ERROR "Unsupported compiler")
 endif()
@@ -389,6 +484,26 @@ if(WIN32)
 		wsock32
 		ole32
 	)
+endif()
+
+# optimize this source file even in debug builds, to make speed (esp. loading times) more bearable
+# used for libs integrated here like stb_* and miniz(ip)
+if(CMAKE_MAJOR_VERSION LESS 3 OR ( CMAKE_MAJOR_VERSION EQUAL 3 AND CMAKE_MINOR_VERSION LESS 11 ))
+	function(always_optimize_sourcefile srcfilename)
+		if(MSVC)
+			set_source_files_properties(${srcfilename} PROPERTIES COMPILE_FLAGS "/Ox")
+		else()
+			set_source_files_properties(${srcfilename} PROPERTIES COMPILE_FLAGS "-O2")
+		endif()
+	endfunction()
+else()
+	function(always_optimize_sourcefile srcfilename)
+		if(MSVC)
+			set_source_files_properties(${srcfilename} PROPERTIES COMPILE_OPTIONS "/Ox")
+		else()
+			set_source_files_properties(${srcfilename} PROPERTIES COMPILE_OPTIONS "-O2")
+		endif()
+	endfunction()
 endif()
 
 # fallback for cmake versions without GNUInstallDirs
@@ -421,7 +536,9 @@ configure_file(
 	"${CMAKE_BINARY_DIR}/config.h"
 )
 
+if(NOT MSVC)
 message(STATUS "Building ${CMAKE_BUILD_TYPE} for ${os}-${cpu}")
+endif()
 
 if(NOT APPLE AND NOT WIN32)
 	message(STATUS "The install target will use the following directories:")
@@ -481,7 +598,11 @@ set(src_renderer
 	renderer/tr_trace.cpp
 	renderer/tr_trisurf.cpp
 	renderer/tr_turboshadow.cpp
+
+	renderer/stblib_impls.c
 )
+
+always_optimize_sourcefile(renderer/stblib_impls.c)
 
 # I'm a bit sloppy with headers and just glob them in..
 # they're only handled in CMake at all so they turn up in Visual Studio solutions..
@@ -509,6 +630,7 @@ set(src_framework
 	framework/DeclPDA.cpp
 	framework/DeclSkin.cpp
 	framework/DeclTable.cpp
+	framework/Dhewm3SettingsMenu.cpp
 	framework/EditField.cpp
 	framework/EventLoop.cpp
 	framework/File.cpp
@@ -523,9 +645,14 @@ set(src_framework
 	framework/async/MsgChannel.cpp
 	framework/async/NetworkSystem.cpp
 	framework/async/ServerScan.cpp
+	framework/miniz/miniz.c
 	framework/minizip/ioapi.c
 	framework/minizip/unzip.cpp
 )
+
+always_optimize_sourcefile(framework/miniz/miniz.c)
+always_optimize_sourcefile(framework/minizip/ioapi.c)
+always_optimize_sourcefile(framework/minizip/unzip.cpp)
 
 add_globbed_headers(src_framework "framework")
 
@@ -603,7 +730,11 @@ set(src_snd
 	sound/snd_system.cpp
 	sound/snd_wavefile.cpp
 	sound/snd_world.cpp
+
+	sound/stbvorbis_impl.c
 )
+
+always_optimize_sourcefile(sound/stbvorbis_impl.c)
 
 add_globbed_headers(src_snd "sound")
 
@@ -683,6 +814,34 @@ set(src_idlib
 )
 
 add_globbed_headers(src_idlib "idlib")
+
+if(IMGUI)
+
+	if(SDL3)
+		set(src_imgui libs/imgui/backends/imgui_impl_sdl3.cpp)
+	else()
+		set(src_imgui libs/imgui/backends/imgui_impl_sdl2.cpp)
+	endif()
+
+set(src_imgui ${src_imgui}
+	libs/imgui/backends/imgui_impl_opengl2.cpp
+	
+	libs/imgui/imgui.h
+	libs/imgui/imgui.cpp
+	libs/imgui/imgui_draw.cpp
+	libs/imgui/imgui_tables.cpp
+	libs/imgui/imgui_widgets.cpp
+	
+	libs/imgui/imgui_demo.cpp
+	
+	sys/sys_imgui.h
+	sys/sys_imgui.cpp
+	sys/imgui_savestyle.cpp
+)
+else()
+set(src_imgui sys/sys_imgui.h)
+endif()
+
 
 set(src_game
 	game/AF.cpp
@@ -1016,8 +1175,12 @@ elseif(WIN32)
 		sys/win32/win_net.cpp
 		sys/win32/win_shared.cpp
 		sys/win32/win_syscon.cpp
-		sys/win32/SDL_win32_main.c
 	)
+
+	if(NOT SDL2 AND NOT SDL3)
+		# only SDL1.2 still uses SDL_win32_main.c
+		set(src_sys_base ${src_sys_base} sys/win32/SDL_win32_main.c)
+	endif()
 
 	# adding the few relevant headers in sys/ manually..
 	set(src_sys_base ${src_sys_base}
@@ -1059,6 +1222,9 @@ include_directories(${CMAKE_BINARY_DIR})
 include_directories(${CMAKE_SOURCE_DIR})
 
 add_library(idlib STATIC ${src_idlib})
+if(SDL3)
+	target_link_libraries(idlib SDL3::Headers) # so it can use SDL_Endian.h
+endif()
 if (AROS)
 	add_library(dll STATIC ${src_arosdll})
         if(CMAKE_SYSTEM_PROCESSOR STREQUAL "i386")
@@ -1067,18 +1233,33 @@ if (AROS)
 		set(AROS_ARCH ${CMAKE_SYSTEM_PROCESSOR})
 	endif()
 else()
-	if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID STREQUAL "Clang" AND NOT MINGW)
+	if(D3_COMPILER_IS_GCC_OR_CLANG AND NOT MINGW)
 		set_target_properties(idlib PROPERTIES COMPILE_FLAGS "-fPIC")
 	endif()
 endif()
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX neo FILES ${src_idlib})
 
+if(HARDLINK_GAME)
+	if(BASE)
+		set(src_core ${src_core} ${src_game})
+		set(game_includes "${CMAKE_SOURCE_DIR}/game")
+		if(D3XP)
+			message(WARNING "hardlinking the base game, d3xp will not be supported (disable BASE for D3XP support with HARDLINK_GAME)")
+		endif()
+		
+	elseif(D3XP)
+		set(src_core ${src_core} ${src_d3xp})
+		set(game_includes "${CMAKE_SOURCE_DIR}/d3xp")
+	endif()
+endif()# HARDLINK_GAME
+
 if(CORE)
 	add_executable(${DHEWM3BINARY} WIN32 MACOSX_BUNDLE
 		${src_core}
 		${src_sys_base}
 		${src_sys_core}
+		${src_imgui}
 		${src_editor_tools}
 	)
 	
@@ -1087,9 +1268,16 @@ if(CORE)
 		set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${DHEWM3BINARY})
 	endif()
 
-	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX neo FILES ${src_core} ${src_sys_base} ${src_sys_core} ${src_editor_tools})
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX neo FILES ${src_core} ${src_sys_base} ${src_sys_core} ${src_imgui} ${src_editor_tools})
 
+	target_include_directories(${DHEWM3BINARY} PRIVATE "${CMAKE_SOURCE_DIR}/libs/imgui")
+
+if(HARDLINK_GAME)
+	set_target_properties(${DHEWM3BINARY} PROPERTIES COMPILE_DEFINITIONS "${TOOLS_DEFINES}")
+	target_include_directories(${DHEWM3BINARY} PRIVATE ${game_includes})
+else()
 	set_target_properties(${DHEWM3BINARY} PROPERTIES COMPILE_DEFINITIONS "__DOOM_DLL__;${TOOLS_DEFINES}")
+endif()
 	set_target_properties(${DHEWM3BINARY} PROPERTIES LINK_FLAGS "${ldflags}")
 	set_target_properties(${DHEWM3BINARY} PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${PROJECT_SOURCE_DIR}/sys/osx/Info.plist)
 
@@ -1097,7 +1285,6 @@ if(CORE)
 		idlib
 		${OPENAL_LIBRARY}
 		${CURL_LIBRARY}
-		${ZLIB_LIBRARY}
 		${SDLx_LIBRARY}
 		${sys_libs}
 	)
@@ -1122,12 +1309,16 @@ if(DEDICATED)
 	
 	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX neo FILES ${src_core} ${src_sys_base} ${src_stub_openal} ${src_stub_gl} ${src_debuggerServer})
 
-	set_target_properties(${DHEWM3BINARY}ded PROPERTIES COMPILE_DEFINITIONS "ID_DEDICATED;__DOOM_DLL__")
+if(HARDLINK_GAME)
+	set_target_properties(${DHEWM3BINARY}ded PROPERTIES COMPILE_DEFINITIONS "IMGUI_DISABLE;ID_DEDICATED")
+	target_include_directories(${DHEWM3BINARY}ded PRIVATE ${game_includes})
+else()
+	set_target_properties(${DHEWM3BINARY}ded PROPERTIES COMPILE_DEFINITIONS "IMGUI_DISABLE;ID_DEDICATED;__DOOM_DLL__")
+endif()
 	set_target_properties(${DHEWM3BINARY}ded PROPERTIES LINK_FLAGS "${ldflags}")
 	target_link_libraries(${DHEWM3BINARY}ded
 		idlib
 		${CURL_LIBRARY}
-		${ZLIB_LIBRARY}
 		${SDLx_LIBRARY}
 		${sys_libs}
 	)
@@ -1141,7 +1332,7 @@ if(DEDICATED)
 	endif()
 endif()
 
-if(BASE)
+if(BASE AND NOT HARDLINK_GAME)
 	if (AROS)
 		add_executable(base sys/aros/dll/dllglue.c ${src_game})
 		set_target_properties(base PROPERTIES OUTPUT_NAME "base.aros-${AROS_ARCH}")
@@ -1171,7 +1362,7 @@ if(BASE)
 	endif()
 endif()
 
-if(D3XP)
+if(D3XP AND NOT HARDLINK_GAME)
 	if (AROS)
 		add_executable(d3xp sys/aros/dll/dllglue.c ${src_d3xp})
 		set_target_properties(d3xp PROPERTIES OUTPUT_NAME "d3xp.aros-${AROS_ARCH}")

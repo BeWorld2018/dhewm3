@@ -183,7 +183,8 @@ public:
 
 	void		CopyFramebuffer( int x, int y, int width, int height, bool useOversizedBuffer );
 
-	void		CopyDepthbuffer( int x, int y, int width, int height );
+	void		CopyDepthbuffer( int x, int y, int width, int height, bool useOversizedBuffer );
+
 
 	void		UploadScratch( const byte *pic, int width, int height );
 
@@ -417,6 +418,9 @@ public:
 	idImage *			specular2DTableImage;		// 2D intensity texture with our specular function with variable specularity
 	idImage *			borderClampImage;			// white inside, black outside
 
+
+	idImage *			currentDepthImage;			// #3877. Allow shaders to access scene depth
+
 	//--------------------------------------------------------
 
 	idImage *			AllocImage( const char *name );
@@ -464,7 +468,7 @@ FIXME: make an "imageBlock" type to hold byte*,width,height?
 byte *R_Dropsample( const byte *in, int inwidth, int inheight,
 							int outwidth, int outheight );
 byte *R_ResampleTexture( const byte *in, int inwidth, int inheight,
-							int outwidth, int outheight );
+							int& outwidth, int& outheight );
 byte *R_MipMapWithAlphaSpecularity( const byte *in, int width, int height );
 byte *R_MipMap( const byte *in, int width, int height, bool preserveBorder );
 byte *R_MipMap3D( const byte *in, int width, int height, int depth, bool preserveBorder );

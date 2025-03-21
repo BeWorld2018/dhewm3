@@ -555,13 +555,6 @@ void VPCALL idSIMD_Generic::MinMax( idVec3 &min, idVec3 &max, const idDrawVert *
 #undef OPER
 }
 
-void VPCALL idSIMD_Generic::MinMax( idVec3 &min, idVec3 &max, const idDrawVert *src, const short *indexes, const int count ) {
-	min[0] = min[1] = min[2] = idMath::INFINITY; max[0] = max[1] = max[2] = -idMath::INFINITY;
-#define OPER(X) const idVec3 &v = src[indexes[(X)]].xyz; if ( v[0] < min[0] ) { min[0] = v[0]; } if ( v[0] > max[0] ) { max[0] = v[0]; } if ( v[1] < min[1] ) { min[1] = v[1]; } if ( v[1] > max[1] ) { max[1] = v[1]; } if ( v[2] < min[2] ) { min[2] = v[2]; } if ( v[2] > max[2] ) { max[2] = v[2]; }
-	UNROLL1(OPER)
-#undef OPER
-}
-
 /*
 ============
 idSIMD_Generic::Clamp
@@ -600,7 +593,7 @@ void VPCALL idSIMD_Generic::ClampMax( float *dst, const float *src, const float 
 idSIMD_Generic::Memcpy
 ================
 */
-ID_INLINE void VPCALL idSIMD_Generic::Memcpy( void *dst, const void *src, const int count ) {
+void VPCALL idSIMD_Generic::Memcpy( void *dst, const void *src, const int count ) {
 	memcpy( dst, src, count );
 }
 
@@ -609,7 +602,7 @@ ID_INLINE void VPCALL idSIMD_Generic::Memcpy( void *dst, const void *src, const 
 idSIMD_Generic::Memset
 ================
 */
-ID_INLINE void VPCALL idSIMD_Generic::Memset( void *dst, const int val, const int count ) {
+void VPCALL idSIMD_Generic::Memset( void *dst, const int val, const int count ) {
 	memset( dst, val, count );
 }
 
@@ -618,7 +611,7 @@ ID_INLINE void VPCALL idSIMD_Generic::Memset( void *dst, const int val, const in
 idSIMD_Generic::Zero16
 ============
 */
-ID_INLINE void VPCALL idSIMD_Generic::Zero16( float *dst, const int count ) {
+void VPCALL idSIMD_Generic::Zero16( float *dst, const int count ) {
 	memset( dst, 0, count * sizeof( float ) );
 }
 
@@ -2256,7 +2249,7 @@ idSIMD_Generic::BlendJoints
 */
 void VPCALL idSIMD_Generic::BlendJoints( idJointQuat *joints, const idJointQuat *blendJoints, const float lerp, const int *index, const int numJoints ) {
 	int i;
-    
+
     // since lerp is a constant, we can special case the two cases if they're true
 	if ( lerp <= 0.0f ) {
 		// this sets joints back to joints. No sense in doing no work, so just return
@@ -2268,7 +2261,7 @@ void VPCALL idSIMD_Generic::BlendJoints( idJointQuat *joints, const idJointQuat 
 		memcpy( joints[0].q.ToFloatPtr(), blendJoints[0].q.ToFloatPtr(), sizeof(idJointQuat) * numJoints );
 		return;
 	}
-	
+
 	for ( i = 0; i < numJoints; i++ ) {
 		int j = index[i];
 		joints[j].q.Slerp( joints[j].q, blendJoints[j].q, lerp );
@@ -2284,16 +2277,16 @@ idSIMD_Generic::ConvertJointQuatsToJointMats
 void VPCALL idSIMD_Generic::ConvertJointQuatsToJointMats( idJointMat *jointMats, const idJointQuat *jointQuats, const int numJoints ) {
 
 	#if 0
-    
+
 	int i;
 
 	for ( i = 0; i < numJoints; i++ ) {
 		jointMats[i].SetRotation( jointQuats[i].q.ToMat3() );
 		jointMats[i].SetTranslation( jointQuats[i].t );
 	}
-	
+
 	#else
-	
+
 	for ( int i = 0; i < numJoints; i++ ) {
 
 		const float *q = jointQuats[i].q.ToFloatPtr();
@@ -2341,7 +2334,7 @@ void VPCALL idSIMD_Generic::ConvertJointQuatsToJointMats( idJointMat *jointMats,
 			m[2*4+0] = xz + wy;
 		}
 	}
-	
+
 	#endif
 }
 
@@ -2354,10 +2347,10 @@ idSIMD_Generic::ConvertJointMatsToJointQuats
 #if defined (__MORPHOS__)
 
 inline float FastScalarInvSqrt( float f ) {
-    
+
 	float estimate;
 	const float kSmallestFloat = FLT_MIN;
-    
+
 	//Calculate a 5 bit starting estimate for the reciprocal sqrt
 	//estimate = __frsqrte ( f + kSmallestFloat );
 	asm ("frsqrte %0,%1\n" : "=f" (estimate) : "f" (f + kSmallestFloat)); // Cowcat
@@ -2373,15 +2366,15 @@ inline float FastScalarInvSqrt( float f ) {
 void VPCALL idSIMD_Generic::ConvertJointMatsToJointQuats( idJointQuat *jointQuats, const idJointMat *jointMats, const int numJoints ) {
 
 	#if 0
-    
+
 	int i;
 
 	for ( i = 0; i < numJoints; i++ ) {
 		jointQuats[i] = jointMats[i].ToJointQuat();
 	}
-	
+
 	#else // future test for G5
-	
+
 	int index;
 
 	// Since we use very little of the data we have to pull in for the altivec version, we end up with
@@ -2410,7 +2403,7 @@ void VPCALL idSIMD_Generic::ConvertJointMatsToJointQuats( idJointQuat *jointQuat
 			t = trace + 1.0f;
             s = idMath::InvSqrt( t ) * 0.5f;
 			//s = FastScalarInvSqrt( t ) * 0.5f; // try this on G5
-            
+
 			jq.q[3] = s * t;
 			jq.q[0] = ( mat[1 * 4 + 2] - mat[2 * 4 + 1] ) * s;
 			jq.q[1] = ( mat[2 * 4 + 0] - mat[0 * 4 + 2] ) * s;
@@ -2431,7 +2424,7 @@ void VPCALL idSIMD_Generic::ConvertJointMatsToJointQuats( idJointQuat *jointQuat
 			t = ( mat[i * 4 + i] - ( mat[j * 4 + j] + mat[k * 4 + k] ) ) + 1.0f;
 			s = idMath::InvSqrt( t ) * 0.5f;
 			//s = FastScalarInvSqrt( t ) * 0.5f; // try this on G5
-            
+
 			jq.q[i] = s * t;
 			jq.q[3] = ( mat[j * 4 + k] - mat[k * 4 + j] ) * s;
 			jq.q[j] = ( mat[i * 4 + j] + mat[j * 4 + i] ) * s;
@@ -2472,7 +2465,7 @@ void VPCALL idSIMD_Generic::ConvertJointMatsToJointQuats( idJointQuat *jointQuat
 	vec_st( ULStoreVal2, 15, ADDR );		\
 	vec_st( ULStoreVal3, 31, ADDR );		\
 	vec_st( ULStoreVal4, 47, ADDR ); }
-	
+
 /*
 ============
 idSIMD_Generic::TransformJoints
@@ -2481,19 +2474,19 @@ idSIMD_Generic::TransformJoints
 void VPCALL idSIMD_Generic::TransformJoints( idJointMat *jointMats, const int *parents, const int firstJoint, const int lastJoint ) {
 
     #if 1
-    
+
 	int i;
 
 	for( i = firstJoint; i <= lastJoint; i++ ) {
 		assert( parents[i] < i );
 		jointMats[i] *= jointMats[parents[i]];
 	}
-	
+
 	#else // later
-	
+
 	// I don't think you can unroll this since the next iteration of the loop might depending on the previous iteration, depending
 	// on what the parents array looks like. This is true in the test code.
-		
+
 	for ( int i = firstJoint; i <= lastJoint; i++ ) {
 		assert( parents[i] < i );
 		float *jointPtr = jointMats[i].ToFloatPtr();
@@ -2523,10 +2516,10 @@ void VPCALL idSIMD_Generic::TransformJoints( idJointMat *jointMats, const int *p
 		vector float vecParentMat1 = vec_perm( v4, v5, permVec2 );
 		vector float vecParentMat2 = vec_perm( v5, v6, permVec2 );
 		vector float vecParentMat3 = vec_perm( v6, v7, permVec2 );
-		
+
 		vector float zero = (vector float)vec_splat_u32(0);
 		vector float C1, C2, C3;
-        
+
 		// matrix multiply
 		C1 = vec_madd( vecJointMat1, vec_splat( vecParentMat1, 0 ), zero ); // m(0 to 3) * a(0)
 		C2 = vec_madd( vecJointMat1, vec_splat( vecParentMat2, 0 ), zero ); // m(4 to 7) * a(4)
@@ -2549,7 +2542,7 @@ void VPCALL idSIMD_Generic::TransformJoints( idJointMat *jointMats, const int *p
 		// store results
 		UNALIGNED_STORE3( (float*) jointPtr, C1, C2, C3 );
 	}
-	
+
 	#endif
 }
 
@@ -2561,19 +2554,19 @@ idSIMD_Generic::UntransformJoints
 void VPCALL idSIMD_Generic::UntransformJoints( idJointMat *jointMats, const int *parents, const int firstJoint, const int lastJoint ) {
 
     #if 1
-    
+
 	int i;
 
 	for( i = lastJoint; i >= firstJoint; i-- ) {
 		assert( parents[i] < i );
 		jointMats[i] /= jointMats[parents[i]];
 	}
-	
+
 	#else // later
-	
+
 	// I don't think you can unroll this since the next iteration of the loop might depending on the previous iteration, depending
 	// on what the parents array looks like. This is true in the test code.
-	
+
 	for ( int i = lastJoint; i >= firstJoint; i-- ) {
 		assert( parents[i] < i );
 		float *jointPtr = jointMats[i].ToFloatPtr();
@@ -2606,7 +2599,7 @@ void VPCALL idSIMD_Generic::UntransformJoints( idJointMat *jointMats, const int 
 
 		vector float zero = (vector float)vec_splat_u32(0);
 		vector float C1, C2, C3;
-        
+
 		// do subtraction at the beginning
 		vector unsigned char permZeroAndLast = (vector unsigned char){0,1,2,3,4,5,6,7,8,9,10,11,28,29,30,31};
 		vecJointMat1 = vec_sub( vecJointMat1, vec_perm( zero, vecParentMat1, permZeroAndLast ) );

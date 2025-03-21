@@ -39,6 +39,8 @@ If you have questions concerning this license or the applicable additional terms
 
 idCVar	idSessionLocal::gui_configServerRate( "gui_configServerRate", "0", CVAR_GUI | CVAR_ARCHIVE | CVAR_ROM | CVAR_INTEGER, "" );
 
+extern idCVar joy_gamepadLayout; // DG: used here to update bindings window when cvar is changed
+
 // implements the setup for, and commands from, the main menu
 
 /*
@@ -480,8 +482,9 @@ void idSessionLocal::HandleRestartMenuCommands( const char *menuCommand ) {
 		}
 
 		if ( !idStr::Icmp( cmd, "restart" ) ) {
-			if ( !LoadGame( GetAutoSaveName( mapSpawnData.serverInfo.GetString("si_map") ) ) ) {
-				// If we can't load the autosave then just restart the map
+			if ( com_disableAutoSaves.GetBool() // DG: support com_disableAutoSaves
+				|| !LoadGame( GetAutoSaveName( mapSpawnData.serverInfo.GetString("si_map") ) ) ) {
+				// If we can't load the autosave (or they're disabled) then just restart the map
 				MoveToNewMap( mapSpawnData.serverInfo.GetString("si_map") );
 			}
 			continue;
@@ -560,6 +563,8 @@ static void loadMod ( const idStr& modName ) {
 		// (and that are supported by dhewm3), add them here
 		"d3le", // The Lost Mission
 		"librecoopd3xp",
+		"perfected_roe",
+		"sikkmodd3xp",
 		// Doom 3: Phobos (they haven't released source yet, so it won't work yet,
 		//                 but ain't I ever the optimist..)
 		"tfphobos"
@@ -1144,8 +1149,10 @@ void idSessionLocal::DispatchCommand( idUserInterface *gui, const char *menuComm
 		HandleIntroMenuCommands( menuCommand );
 	} else if ( gui == guiMsg ) {
 		HandleMsgCommands( menuCommand );
-	//} else if ( gui == guiTakeNotes ) {
-	//	HandleNoteCommands( menuCommand );
+#ifndef __MORPHOS__
+	} else if ( gui == guiTakeNotes ) {
+		HandleNoteCommands( menuCommand );
+#endif
 	} else if ( gui == guiRestartMenu ) {
 		HandleRestartMenuCommands( menuCommand );
 	} else if ( game && guiActive && guiActive->State().GetBool( "gameDraw" ) ) {
@@ -1208,6 +1215,14 @@ void idSessionLocal::GuiFrameEvents() {
 	const char	*cmd;
 	sysEvent_t  ev;
 	idUserInterface	*gui;
+
+	// DG: if joy_gamepadLayout changes, the binding names in the main/controls menu must be updated
+	if ( joy_gamepadLayout.IsModified() ) {
+		if ( guiMainMenu != NULL ) {
+			guiMainMenu->SetKeyBindingNames();
+		}
+		joy_gamepadLayout.ClearModified();
+	}
 
 	// stop generating move and button commands when a local console or menu is active
 	// running here so SP, async networking and no game all go through it

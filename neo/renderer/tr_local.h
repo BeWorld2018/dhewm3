@@ -109,6 +109,7 @@ SURFACES
 
 // drawSurf_t are always allocated and freed every frame, they are never cached
 static const int	DSF_VIEW_INSIDE_SHADOW	= 1;
+static const int	DSF_SOFT_PARTICLE		= 2; // #3878 - soft particles
 
 typedef struct drawSurf_s {
 	const srfTriangles_t	*geo;
@@ -121,6 +122,7 @@ typedef struct drawSurf_s {
 	int						dsFlags;			// DSF_VIEW_INSIDE_SHADOW, etc
 	struct vertCache_s		*dynamicTexCoords;	// float * in vertex cache memory
 	// specular directions for non vertex program cards, skybox texcoords, etc
+	float					particle_radius;	// The radius of individual quads for soft particles #3878
 } drawSurf_t;
 
 
@@ -804,6 +806,10 @@ public:
 	//     so they can be reset in EndFrame() (Editors tend to mess up the viewport by using BeginFrame())
 	int						origWidth;
 	int						origHeight;
+
+	// DG: taken from the current map's worldspawn ("allow_nospecular")
+	//     true if (unlike in Vanilla Doom3) the "nospecular" parm of a light should be respected
+	bool					allowNoSpecular;
 };
 
 extern backEndState_t		backEnd;
@@ -819,6 +825,7 @@ extern idCVar r_displayRefresh;			// optional display refresh rate option for vi
 extern idCVar r_fullscreen;				// 0 = windowed, 1 = full screen
 extern idCVar r_fullscreenDesktop;		// 0: 'real' fullscreen mode 1: keep resolution 'desktop' fullscreen mode
 extern idCVar r_multiSamples;			// number of antialiasing samples
+extern idCVar r_windowResizable;		// DG: allow resizing and maximizing the window
 
 extern idCVar r_ignore;					// used for random debugging without defining new vars
 extern idCVar r_ignore2;				// used for random debugging without defining new vars
@@ -845,8 +852,6 @@ extern idCVar r_renderer;				// arb2, etc
 extern idCVar r_checkBounds;			// compare all surface bounds with precalculated ones
 
 extern idCVar r_useLightPortalFlow;		// 1 = do a more precise area reference determination
-extern idCVar r_useTripleTextureARB;	// 1 = cards with 3+ texture units do a two pass instead of three pass // Cowcat
-extern idCVar r_usedrawinteraction0;    // Morphos workaround - Cowcat
 extern idCVar r_useShadowSurfaceScissor;// 1 = scissor shadows by the scissor rect of the interaction surfaces
 extern idCVar r_useConstantMaterials;	// 1 = use pre-calculated material registers if possible
 extern idCVar r_useInteractionTable;	// create a full entityDefs * lightDefs table to make finding interactions faster
@@ -881,6 +886,8 @@ extern idCVar r_useIndexBuffers;		// if 0, don't use ARB_vertex_buffer_object fo
 extern idCVar r_useEntityCallbacks;		// if 0, issue the callback immediately at update time, rather than defering
 extern idCVar r_lightAllBackFaces;		// light all the back faces, even when they would be shadowed
 extern idCVar r_useDepthBoundsTest;     // use depth bounds test to reduce shadow fill
+
+extern idCVar r_supportNoSpecular;		// support nospecular parm of lights
 
 extern idCVar r_skipPostProcess;		// skip all post-process renderings
 extern idCVar r_skipSuppress;			// ignore the per-view suppressions
@@ -983,6 +990,10 @@ extern idCVar r_materialOverride;		// override all materials
 
 extern idCVar r_debugRenderToTexture;
 
+extern idCVar r_glDebugContext; // DG: use debug context to call logging callbacks on GL errors
+extern idCVar r_enableDepthCapture; // DG: disable capturing depth buffer, used for soft particles
+extern idCVar r_useSoftParticles;
+
 /*
 ====================================================================
 
@@ -1067,8 +1078,9 @@ typedef struct {
 	int			width;
 	int			height;
 	bool		fullScreen;
+	bool		fullScreenDesktop;
 	bool		stereo;
-	int			displayHz;
+	int			displayHz; // TODO: SDL3 uses float
 	int			multiSamples;
 } glimpParms_t;
 
@@ -1114,8 +1126,16 @@ void		GLimp_DeactivateContext( void );
 const int GRAB_GRABMOUSE	= (1 << 0);
 const int GRAB_HIDECURSOR	= (1 << 1);
 const int GRAB_RELATIVEMOUSE = (1 << 2);
+const int GRAB_ENABLETEXTINPUT = (1 << 3); // only used with SDL3, where textinput must be explicitly activated
 
 void GLimp_GrabInput(int flags);
+
+bool GLimp_SetSwapInterval( int swapInterval );
+bool GLimp_SetWindowResizable( bool enableResizable );
+void GLimp_UpdateWindowSize();
+
+glimpParms_t GLimp_GetCurState();
+
 /*
 ====================================================================
 
@@ -1173,7 +1193,7 @@ viewEntity_t *R_SetEntityDefViewEntity( idRenderEntityLocal *def );
 viewLight_t *R_SetLightDefViewLight( idRenderLightLocal *def );
 
 void R_AddDrawSurf( const srfTriangles_t *tri, const viewEntity_t *space, const renderEntity_t *renderEntity,
-					const idMaterial *shader, const idScreenRect &scissor );
+					const idMaterial *shader, const idScreenRect &scissor, const float soft_particle_radius = -1.0f ); // soft particles in #3878
 
 void R_LinkLightSurf( const drawSurf_t **link, const srfTriangles_t *tri, const viewEntity_t *space,
 				   const idRenderLightLocal *light, const idMaterial *shader, const idScreenRect &scissor, bool viewInsideShadow );
@@ -1310,6 +1330,10 @@ typedef enum {
 	FPROG_AMBIENT,
 	VPROG_GLASSWARP,
 	FPROG_GLASSWARP,
+	// SteveL #3878: soft particles
+	VPROG_SOFT_PARTICLE,
+	FPROG_SOFT_PARTICLE,
+	//
 	PROG_USER
 } program_t;
 
@@ -1357,9 +1381,22 @@ typedef enum {
 	PP_SPECULAR_MATRIX_S,
 	PP_SPECULAR_MATRIX_T,
 	PP_COLOR_MODULATE,
-	PP_COLOR_ADD,
+	PP_COLOR_ADD, // 17
 
-	PP_LIGHT_FALLOFF_TQ = 20	// only for NV programs
+	PP_LIGHT_FALLOFF_TQ = 20,	// only for NV programs - DG: unused
+	PP_GAMMA_BRIGHTNESS = 21, // DG: for gamma in shader: { r_brightness, r_brightness, r_brightness, 1/r_gamma }
+	// DG: for soft particles from TDM: reciprocal of _currentDepth size.
+	//     Lets us convert a screen position to a texcoord in _currentDepth
+	PP_CURDEPTH_RECIPR  = 22,
+	// DG: for soft particles from TDM: particle radius, given as { radius, 1/(fadeRange), 1/radius }
+	//     fadeRange is the particle diameter for alpha blends (like smoke), but the particle radius for additive
+	//     blends (light glares), because additive effects work differently. Fog is half as apparent when a wall
+	//     is in the middle of it. Light glares lose no visibility when they have something to reflect off.
+	PP_PARTICLE_RADIUS  = 23,
+	// DG: for soft particles from TDM: color channel mask.
+	//     Particles with additive blend need their RGB channels modifying to blend them out
+	//     Particles with an alpha blend need their alpha channel modifying.
+	PP_PARTICLE_COLCHAN_MASK = 24,
 } programParameter_t;
 
 

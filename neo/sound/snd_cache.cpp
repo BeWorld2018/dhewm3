@@ -502,7 +502,7 @@ void idSoundSample::Load( void ) {
 			}
 		}
     }
-    
+
     #if !defined(__MORPHOS__) // very slow here - Cowcat
     {
 		// OGG decompressed at load time (when smaller than s_decompressionLimit seconds, 6 seconds by default)
@@ -566,7 +566,7 @@ void idSoundSample::Load( void ) {
 	}
 
     #endif
-    
+
 	fh.Close();
 }
 

@@ -76,14 +76,6 @@ void idVertexCache::ActuallyFree( vertCache_t *block ) {
 			qglBindBufferARB(GL_ARRAY_BUFFER_ARB, block->vbo);
 			qglBufferDataARB(GL_ARRAY_BUFFER_ARB, 0, 0, GL_DYNAMIC_DRAW_ARB);
 #endif
-			/*
-			//if( block->vbo != currentVertexBuffer )
-			{
-				qglBindBufferARB(GL_ARRAY_BUFFER_ARB, block->vbo);
-			}
-
-			qglBufferDataARB(GL_ARRAY_BUFFER_ARB, 0, NULL, GL_DYNAMIC_DRAW_ARB);
-			*/
 		} else if ( block->virtMem ) {
 			Mem_Free( block->virtMem );
 			block->virtMem = NULL;
@@ -134,11 +126,10 @@ void *idVertexCache::Position( vertCache_t *buffer ) {
 				common->Printf( "GL_ARRAY_BUFFER_ARB = %i (%i bytes)\n", buffer->vbo, buffer->size );
 			}
 		}
-		
-		if( buffer->vbo != currentVertexBuffer )
-		{
-			qglBindBufferARB( (buffer->indexBuffer ? GL_ELEMENT_ARRAY_BUFFER_ARB : GL_ARRAY_BUFFER_ARB), buffer->vbo );
-			currentVertexBuffer = buffer->vbo;
+		if ( buffer->indexBuffer ) {
+			qglBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, buffer->vbo );
+		} else {
+			qglBindBufferARB( GL_ARRAY_BUFFER_ARB, buffer->vbo );
 		}
 		return (void *)buffer->offset;
 	}
@@ -166,11 +157,10 @@ void idVertexCache::Init() {
 		r_vertexBufferMegs.SetInteger( 8 );
 	}
 
-	currentVertexBuffer = 0;
+	virtualMemory = false;
 
 	// use ARB_vertex_buffer_object unless explicitly disabled
 	if( r_useVertexBuffers.GetInteger() && glConfig.ARBVertexBufferObjectAvailable ) {
-		virtualMemory = false;
 		common->Printf( "using ARB_vertex_buffer_object memory\n" );
 	} else {
 		virtualMemory = true;
@@ -216,8 +206,6 @@ void idVertexCache::PurgeAll() {
 	while( staticHeaders.next != &staticHeaders ) {
 		ActuallyFree( staticHeaders.next );
 	}
-
-	currentVertexBuffer = 0;
 }
 
 /*
@@ -229,7 +217,6 @@ void idVertexCache::Shutdown() {
 //	PurgeAll();	// !@#: also purge the temp buffers
 
 	headerAllocator.Shutdown();
-	currentVertexBuffer = 0;
 }
 
 /*
@@ -238,7 +225,7 @@ idVertexCache::Alloc
 ===========
 */
 void idVertexCache::Alloc( void *data, int size, vertCache_t **buffer, bool indexBuffer ) {
-	vertCache_t *block = NULL;
+	vertCache_t	*block;
 
 	if ( size <= 0 ) {
 		common->Error( "idVertexCache::Alloc: size = %i\n", size );
@@ -248,48 +235,23 @@ void idVertexCache::Alloc( void *data, int size, vertCache_t **buffer, bool inde
 	*buffer = NULL;
 
 	// if we don't have any remaining unused headers, allocate some more
-	if ( freeStaticHeaders.next == &freeStaticHeaders ) // Cowcat notes: Huge lag here for MOS. ( Fixed for MOS 3.17 )
-	{
-		common->Printf( "-----Alloc more headers in. Size = %i\n", size ); // not needed for other systems ( OS4? )
+	if ( freeStaticHeaders.next == &freeStaticHeaders ) {
 
 		for ( int i = 0; i < EXPAND_HEADERS; i++ ) {
 			block = headerAllocator.Alloc();
-			
-			if( !virtualMemory ) {
-				qglGenBuffersARB( 1, &block->vbo );
-				block->size = 0;
-			}
-
 			block->next = freeStaticHeaders.next;
 			block->prev = &freeStaticHeaders;
 			block->next->prev = block;
 			block->prev->next = block;
-		}
 
-		//common->Printf( "-----Alloc more headers out. Size = %i\n", block->size );
-		common->Printf( "-----Alloc more headers out\n"); // same as above (but it did his job).
-	}
-
-	// try to find a matching block to replace so that we're not continually respecifying vbo data each frame
-	for (vertCache_t *findblock = freeStaticHeaders.next; /**/; findblock = findblock->next)
-	{
-		if(findblock == &freeStaticHeaders)
-		{
-			block = freeStaticHeaders.next;
-			break;
+			if( !virtualMemory ) {
+				qglGenBuffersARB( 1, & block->vbo );
+			}
 		}
-
-		if(findblock->size != size)
-		{
-			continue;
-		}
-		
-		block = findblock;
-		break;
 	}
 
 	// move it from the freeStaticHeaders list to the staticHeaders list
-	//block = freeStaticHeaders.next;
+	block = freeStaticHeaders.next;
 	block->next->prev = block->prev;
 	block->prev->next = block->next;
 	block->next = staticHeaders.next;
@@ -315,21 +277,22 @@ void idVertexCache::Alloc( void *data, int size, vertCache_t **buffer, bool inde
 	// load time lots of things may be created, but they aren't
 	// referenced by the GPU yet, and can be purged if needed.
 	block->frameUsed = currentFrame - NUM_VERTEX_FRAMES;
-	block->indexBuffer = indexBuffer;
 
-	GLenum target = ( indexBuffer ? GL_ELEMENT_ARRAY_BUFFER_ARB : GL_ARRAY_BUFFER_ARB );
-	GLenum usage = ( allocatingTempBuffer ? GL_STREAM_DRAW_ARB : GL_STATIC_DRAW_ARB );
+	block->indexBuffer = indexBuffer;
 
 	// copy the data
 	if ( block->vbo ) {
-		qglBindBufferARB( target, block->vbo );
-		qglBufferDataARB( target, (GLsizeiptrARB)size, data, usage );
-
-		// old tinygl needed this trick - Cowcat
-		//qglBufferDataARB( target, (GLsizeiptrARB)size, 0, usage );
-		//qglBufferSubDataARB( target, 0, (GLsizeiptrARB)size, data );
-
-		currentVertexBuffer = block->vbo;
+		if ( indexBuffer ) {
+			qglBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, block->vbo );
+			qglBufferDataARB( GL_ELEMENT_ARRAY_BUFFER_ARB, (GLsizeiptrARB)size, data, GL_STATIC_DRAW_ARB );
+		} else {
+			qglBindBufferARB( GL_ARRAY_BUFFER_ARB, block->vbo );
+			if ( allocatingTempBuffer ) {
+				qglBufferDataARB( GL_ARRAY_BUFFER_ARB, (GLsizeiptrARB)size, data, GL_STREAM_DRAW_ARB );
+			} else {
+				qglBufferDataARB( GL_ARRAY_BUFFER_ARB, (GLsizeiptrARB)size, data, GL_STATIC_DRAW_ARB );
+			}
+		}
 	} else {
 		block->virtMem = Mem_Alloc( size );
 		SIMDProcessor->Memcpy( block->virtMem, data, size );
@@ -407,8 +370,6 @@ there may still be future references to dynamically created surfaces.
 vertCache_t	*idVertexCache::AllocFrameTemp( void *data, int size ) {
 	vertCache_t	*block;
 
-    	//common->Printf( "idVertexCache::AllocFrameTemp: size = %i\n", size );
-
 	if ( size <= 0 ) {
 		common->Error( "idVertexCache::AllocFrameTemp: size = %i\n", size );
 	}
@@ -426,7 +387,6 @@ vertCache_t	*idVertexCache::AllocFrameTemp( void *data, int size ) {
 
 	// if we don't have any remaining unused headers, allocate some more
 	if ( freeDynamicHeaders.next == &freeDynamicHeaders ) {
-		common->Printf( "idVertexCache::AllocFrameTemp: =\n" );
 
 		for ( int i = 0; i < EXPAND_HEADERS; i++ ) {
 			block = headerAllocator.Alloc();
@@ -435,8 +395,6 @@ vertCache_t	*idVertexCache::AllocFrameTemp( void *data, int size ) {
 			block->next->prev = block;
 			block->prev->next = block;
 		}
-
-		common->Printf( "idVertexCache::AllocFrameTemp: = end\n" );
 	}
 
 	// move it from the freeDynamicHeaders list to the dynamicHeaders list
@@ -458,21 +416,15 @@ vertCache_t	*idVertexCache::AllocFrameTemp( void *data, int size ) {
 	block->frameUsed = 0;
 
 	// copy the data
+	block->virtMem = tempBuffers[listNum]->virtMem;
 	block->vbo = tempBuffers[listNum]->vbo;
 
 	if ( block->vbo ) {
-		if( block->vbo != currentVertexBuffer ) {
-			qglBindBufferARB( GL_ARRAY_BUFFER_ARB, block->vbo );
-			currentVertexBuffer = block->vbo;
-		}
-
+		qglBindBufferARB( GL_ARRAY_BUFFER_ARB, block->vbo );
 		qglBufferSubDataARB( GL_ARRAY_BUFFER_ARB, block->offset, (GLsizeiptrARB)size, data );
 	} else {
-		block->virtMem = tempBuffers[listNum]->virtMem;
 		SIMDProcessor->Memcpy( (byte *)block->virtMem + block->offset, data, size );
 	}
-
-	//common->Printf( "idVertexCache::AllocFrameTemp: end\n" );
 
 	return block;
 }

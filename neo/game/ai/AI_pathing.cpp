@@ -613,7 +613,7 @@ pathNode_t *BuildPathTree( const obstacle_t *obstacles, int numObstacles, const 
 
 	root->delta = seekPos - root->pos;
 	root->numNodes = 0;
-    
+
 	pathNodeQueue.Add( root );
 
 	for ( node = pathNodeQueue.Get(); node && pathNodeAllocator.GetAllocCount() < MAX_PATH_NODES; node = pathNodeQueue.Get() ) {
@@ -1342,7 +1342,7 @@ static int Ballistics( const idVec3 &start, const idVec3 &end, float speed, floa
 =====================
 HeightForTrajectory
 
-Returns the maximum hieght of a given trajectory
+Returns the maximum height of a given trajectory
 =====================
 */
 #if 0

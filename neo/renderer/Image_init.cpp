@@ -388,6 +388,19 @@ static void R_RGBA8Image( idImage *image ) {
 		TF_DEFAULT, false, TR_REPEAT, TD_HIGH_QUALITY );
 }
 
+static void R_DepthImage( idImage *image ) {
+	byte	data[DEFAULT_SIZE][DEFAULT_SIZE][4];
+
+	memset( data, 0, sizeof( data ) );
+	data[0][0][0] = 16;
+	data[0][0][1] = 32;
+	data[0][0][2] = 48;
+	data[0][0][3] = 96;
+
+	image->GenerateImage( (byte *)data, DEFAULT_SIZE, DEFAULT_SIZE,
+		TF_NEAREST, false, TR_CLAMP, TD_HIGH_QUALITY );
+}
+
 #if 0
 static void R_RGB8Image( idImage *image ) {
 	byte	data[DEFAULT_SIZE][DEFAULT_SIZE][4];
@@ -1571,7 +1584,7 @@ idImage	*idImageManager::ImageFromFile( const char *_name, textureFilter_t filte
 			if ( image_preload.GetBool() && !insideLevelLoad ) {
 				image->referencedOutsideLevelLoad = true;
 				image->ActuallyLoadImage( true, false );	// check for precompressed, load is from front end
-				declManager->MediaPrint( "%ix%i %s (reload for mixed referneces)\n", image->uploadWidth, image->uploadHeight, image->imgName.c_str() );
+				declManager->MediaPrint( "%ix%i %s (reload for mixed references)\n", image->uploadWidth, image->uploadHeight, image->imgName.c_str() );
 			}
 			return image;
 		}
@@ -1590,13 +1603,13 @@ idImage	*idImageManager::ImageFromFile( const char *_name, textureFilter_t filte
 
 	// Fixes blurr with really low downsizes (See Image_load/Getdownsize). - Cowcat
 	checkfonts = false;
-    
-	if ( name.Find( "fonts/") >= 0 ) { 
+
+	if ( name.Find( "fonts/") >= 0 ) {
 		allowDownSize = false;
 		checkfonts = true;
 	}
 	//
-    
+
 	image->allowDownSize = allowDownSize;
 	image->repeat = repeat;
 	image->depth = depth;
@@ -2004,6 +2017,7 @@ void idImageManager::Init() {
 	accumImage = ImageFromFunction("_accum", R_RGBA8Image );
 	scratchCubeMapImage = ImageFromFunction("_scratchCubeMap", makeNormalizeVectorCubeMap );
 	currentRenderImage = ImageFromFunction("_currentRender", R_RGBA8Image );
+	currentDepthImage = ImageFromFunction( "_currentDepth", R_DepthImage ); // #3877. Allow shaders to access scene depth
 
 	cmdSystem->AddCommand( "reloadImages", R_ReloadImages_f, CMD_FL_RENDERER, "reloads images" );
 	cmdSystem->AddCommand( "listImages", R_ListImages_f, CMD_FL_RENDERER, "lists images" );

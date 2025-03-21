@@ -1519,9 +1519,9 @@ idStr::snPrintf
 int idStr::snPrintf( char *dest, int size, const char *fmt, ...) {
 	va_list argptr;
 	int len;
-	
+
 	va_start( argptr, fmt );
-	
+
 	#if defined(__MORPHOS__)
 	#undef vsnprintf
 	len = vsnprintf(dest, size, fmt, argptr);
@@ -1529,9 +1529,9 @@ int idStr::snPrintf( char *dest, int size, const char *fmt, ...) {
 	#else
 	len = D3_vsnprintfC99(dest, size, fmt, argptr);
 	#endif
-	
+
 	va_end( argptr );
-	
+
 	if ( len >= 32000 ) {
 		// TODO: Previously this function used a 32000 byte buffer to write into
 		//       with vsprintf(), and raised this error if that was overflowed
@@ -1576,7 +1576,7 @@ int idStr::vsnPrintf( char *dest, int size, const char *fmt, va_list argptr ) {
 	#else
 	int ret = D3_vsnprintfC99(dest, size, fmt, argptr);
 	#endif
-	
+
 	if ( ret < 0 || ret >= size ) {
 		return -1;
 	}
