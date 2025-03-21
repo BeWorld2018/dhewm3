@@ -181,6 +181,8 @@ Sys_OpenURL
 =================
 */
 void idSysLocal::OpenURL( const char *url, bool quit ) {
+
+	// TODO: use SDL_OpenURL ?!
 }
 
 /*

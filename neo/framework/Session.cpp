@@ -380,11 +380,13 @@ idSessionLocal::idSessionLocal
 ===============
 */
 idSessionLocal::idSessionLocal() {
+#ifdef __MORPHOS__
 	guiInGame = guiMainMenu = guiIntro \
 		= guiRestartMenu = guiLoading = guiGameOver = guiActive \
-#ifdef __MORPHOS__
-		= guiTest = guiMsg = guiMsgRestore = /*guiTakeNotes =*/ NULL;
+		= guiTest = guiMsg = guiMsgRestore = NULL;
 #else
+	guiInGame = guiMainMenu = guiIntro \
+		= guiRestartMenu = guiLoading = guiGameOver = guiActive \
 		= guiTest = guiMsg = guiMsgRestore = guiTakeNotes = NULL;
 #endif
 
@@ -1798,7 +1800,7 @@ void SaveGame_f( const idCmdArgs &args ) {
 TakeViewNotes_f
 ===============
 */
-#if 0
+#ifndef __MORPHOS__
 void TakeViewNotes_f( const idCmdArgs &args ) {
 	const char *p = ( args.Argc() > 1 ) ? args.Argv( 1 ) : "";
 	sessLocal.TakeNotes( p );
@@ -1809,7 +1811,7 @@ void TakeViewNotes_f( const idCmdArgs &args ) {
 TakeViewNotes2_f
 ===============
 */
-#if 0
+#ifndef __MORPHOS__
 void TakeViewNotes2_f( const idCmdArgs &args ) {
 	const char *p = ( args.Argc() > 1 ) ? args.Argv( 1 ) : "";
 	sessLocal.TakeNotes( p, true );
@@ -1821,7 +1823,7 @@ void TakeViewNotes2_f( const idCmdArgs &args ) {
 idSessionLocal::TakeNotes
 ===============
 */
-#if 0
+#ifndef __MORPHOS__
 void idSessionLocal::TakeNotes( const char *p, bool extended ) {
 	if ( !mapSpawned ) {
 		common->Printf( "No map loaded!\n" );
@@ -2528,7 +2530,7 @@ void idSessionLocal::Draw() {
 		}
 
 		// draw the menus full screen
-		#if 0
+		#ifndef __MORPHOS__
 		if ( guiActive == guiTakeNotes && !com_skipGameDraw.GetBool() ) {
 			game->Draw( GetLocalClientNum() );
 		}
@@ -3025,11 +3027,11 @@ void idSessionLocal::Init() {
 	cmdSystem->AddCommand( "loadGame", LoadGame_f, CMD_FL_SYSTEM|CMD_FL_CHEAT, "loads a game", idCmdSystem::ArgCompletion_SaveGame );
 #endif
 
-#if 0
+#ifndef __MORPHOS__
 	cmdSystem->AddCommand( "takeViewNotes", TakeViewNotes_f, CMD_FL_SYSTEM, "take notes about the current map from the current view" );
 	cmdSystem->AddCommand( "takeViewNotes2", TakeViewNotes2_f, CMD_FL_SYSTEM, "extended take view notes" );
 #endif
-
+    
 	cmdSystem->AddCommand( "rescanSI", Session_RescanSI_f, CMD_FL_SYSTEM, "internal - rescan serverinfo cvars and tell game" );
 
 	cmdSystem->AddCommand( "promptKey", Session_PromptKey_f, CMD_FL_SYSTEM, "prompt and sets the CD Key" );
@@ -3056,7 +3058,9 @@ void idSessionLocal::Init() {
 	guiRestartMenu = uiManager->FindGui( "guis/restart.gui", true, false, true );
 	guiGameOver = uiManager->FindGui( "guis/gameover.gui", true, false, true );
 	guiMsg = uiManager->FindGui( "guis/msg.gui", true, false, true );
-	//guiTakeNotes = uiManager->FindGui( "guis/takeNotes.gui", true, false, true );
+#ifndef __MORPHOS__
+	guiTakeNotes = uiManager->FindGui( "guis/takeNotes.gui", true, false, true );
+#endif
 	guiIntro = uiManager->FindGui( "guis/intro.gui", true, false, true );
 
 	whiteMaterial = declManager->FindMaterial( "_white" );

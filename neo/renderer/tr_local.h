@@ -650,7 +650,9 @@ typedef struct {
 
 	viewLight_t *		vLight;
 	int					depthFunc;			// GLS_DEPTHFUNC_EQUAL, or GLS_DEPTHFUNC_LESS for translucent
-	//float				lightTextureMatrix[16];	// only if lightStage->texture.hasMatrix
+#ifndef __MOPRPHOS__
+	float				lightTextureMatrix[16];	// only if lightStage->texture.hasMatrix
+#endif
 	float				lightColor[4];		// evaluation of current light's color stage
 
 	float				lightScale;			// Every light color calaculation will be multiplied by this,
@@ -852,6 +854,8 @@ extern idCVar r_renderer;				// arb2, etc
 extern idCVar r_checkBounds;			// compare all surface bounds with precalculated ones
 
 extern idCVar r_useLightPortalFlow;		// 1 = do a more precise area reference determination
+extern idCVar r_useTripleTextureARB;	// 1 = cards with 3+ texture units do a two pass instead of three pass // Cowcat
+extern idCVar r_usedrawinteraction0;    // Morphos workaround - Cowcat
 extern idCVar r_useShadowSurfaceScissor;// 1 = scissor shadows by the scissor rect of the interaction surfaces
 extern idCVar r_useConstantMaterials;	// 1 = use pre-calculated material registers if possible
 extern idCVar r_useInteractionTable;	// create a full entityDefs * lightDefs table to make finding interactions faster

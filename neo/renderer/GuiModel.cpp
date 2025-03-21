@@ -132,21 +132,12 @@ void idGuiModel::ReadFromDemo( idDemoFile *demo ) {
 	demo->ReadInt( i );
 	indexes.SetNum( i, false );
 	for ( j = 0; j < i; j++ ) {
-
-		#if 0
-
-		#if GL_INDEX_TYPE == GL_UNSIGNED_SHORT
-		demo->ReadShort(indexes[j] );
-		#else
+#ifndef __MORPHOS__
 		demo->ReadInt(indexes[j] );
-		#endif
-
-		#else // fix from android port - Cowcat
-
+#else // fix from android port - Cowcat
 		demo->ReadInt(k);
 		indexes[j] = (glIndex_t)k;
-
-		#endif
+#endif
 	}
 
 	i = surfaces.Num();

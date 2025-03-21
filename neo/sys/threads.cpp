@@ -58,7 +58,7 @@ If you have questions concerning this license or the applicable additional terms
 #if __cplusplus >= 201103
   // xthreadinfo::threadId doesn't use SDL_threadID directly so we don't drag SDL headers into sys_public.h
   // but we should still make sure that the type fits (in SDL1.2 it's Uint32, in SDL2 it's unsigned long)
-  static_assert( sizeof(SDL_threadID) <= sizeof(xthreadInfo::threadId), "xthreadInfo::threadId has unsuitable type!" );
+  //static_assert( sizeof(SDL_threadID) <= sizeof(xthreadInfo::threadId), "xthreadInfo::threadId has unsuitable type!" );
 #endif
 
 static SDL_mutex	*mutex[MAX_CRITICAL_SECTIONS] = { };

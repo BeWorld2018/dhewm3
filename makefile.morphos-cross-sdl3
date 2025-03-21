@@ -1,9 +1,11 @@
 #export PATH=$PATH:/gg/bin
-
-# SDL2 and NO IMGUI build
+#
+# SDL3 with IMGUI build
+#
 
 B = buildmos
 BID = $(B)/idlib
+BIM = $(B)/libs
 BB  = $(B)/base
 B3  = $(B)/d3xp
 BR  = $(B)/doom
@@ -17,16 +19,20 @@ RANLIB = ppc-morphos-ranlib
 #PATH_SOURCE = /home/cowcat/Escritorio/Cross/dhewm3
 PATH_SOURCE = ./
 
-CXX_FLAGS = -Wall -DD3_IS_BIG_ENDIAN=1 -DNDEBUG -O3 -ffast-math -ffinite-math-only -fdiagnostics-color=always -noixemul -fvisibility=hidden -fomit-frame-pointer -fno-strict-aliasing -Wno-sign-compare -Wno-switch -fpermissive -Wno-class-memaccess -D_LARGEFILE64_SOURCE -pthread
-CC_FLAGS = -Wall -DD3_IS_BIG_ENDIAN=1 -DNDEBUG -O3 -ffast-math -ffinite-math-only -noixemul -fdiagnostics-color=always -fvisibility=hidden -fomit-frame-pointer -fno-math-errno -fno-trapping-math -fno-strict-aliasing -Wno-sign-compare -Wno-switch -D_LARGEFILE64_SOURCE -pthread
+CXX_FLAGS = -Wall -DD3_SDL3=1 -DD3_IS_BIG_ENDIAN=1 -DNDEBUG -O3 -ffast-math -ffinite-math-only -fdiagnostics-color=always -noixemul -fvisibility=hidden -fomit-frame-pointer -fno-strict-aliasing -Wno-sign-compare -Wno-switch -fpermissive -Wno-class-memaccess -D_LARGEFILE64_SOURCE -pthread
+CC_FLAGS = -Wall -DD3_SDL3=1 -DD3_IS_BIG_ENDIAN=1 -DNDEBUG -O3 -ffast-math -ffinite-math-only -noixemul -fdiagnostics-color=always -fvisibility=hidden -fomit-frame-pointer -fno-math-errno -fno-trapping-math -fno-strict-aliasing -Wno-sign-compare -Wno-switch -D_LARGEFILE64_SOURCE -pthread
 
-CXX_INCLUDES = -I$(PATH_SOURCE) -I$(PATH_SOURCE)neo -I/gg/usr/local/include -I/gg/usr/local/include/SDL2
+CXX_INCLUDES = -I$(PATH_SOURCE) -I$(PATH_SOURCE)neo -I/gg/usr/local/include -I$(PATH_SOURCE)neo/libs/imgui
 CXX_INCLUDES_BASE = -I$(PATH_SOURCE) -I$(PATH_SOURCE)neo -I$(PATH_SOURCE)neo/game 
 CXX_INCLUDES_D3XP = -I$(PATH_SOURCE) -I$(PATH_SOURCE)neo -I$(PATH_SOURCE)neo/d3xp
-CXX_DEFINES = -D__DOOM_DLL__ -DIMGUI_DISABLE
-CXX_DEFINES_BASE = -DGAME_DLL -Dbase_EXPORTS -DIMGUI_DISABLE
-CXX_DEFINES_D3XP = -DGAME_DLL -D_D3XP -DCTF -Dd3xp_EXPORTS -DIMGUI_DISABLE
-CXX_DEFINES_ALTIVEC = -D__VECTOR__ -DIMGUI_DISABLE
+CXX_DEFINES = -D__DOOM_DLL__ 
+# -DIMGUI_DISABLE
+CXX_DEFINES_BASE = -DGAME_DLL -Dbase_EXPORTS 
+#-DIMGUI_DISABLE
+CXX_DEFINES_D3XP = -DGAME_DLL -D_D3XP -DCTF -Dd3xp_EXPORTS
+# -DIMGUI_DISABLE
+CXX_DEFINES_ALTIVEC = -D__VECTOR__ 
+#-DIMGUI_DISABLE
 
 DO_CC = $(CC) $(CC_FLAGS) $(C_DEFINES) $(CXX_INCLUDES) -o $@ -c $<
 DO_CXX = $(CXX) $(CXX_FLAGS) $(CXX_DEFINES) $(CXX_INCLUDES) -o $@ -c $<
@@ -317,7 +323,6 @@ $(BR)/miniz.o \
 $(BR)/ioapi.o \
 $(BR)/unzip.o \
 \
-\
 $(BR)/CollisionModel_contacts.o \
 $(BR)/CollisionModel_contents.o \
 $(BR)/CollisionModel_debug.o \
@@ -406,16 +411,16 @@ $(BR)/posix_main.o \
 $(BR)/main.o \
 $(BR)/glimp.o \
 $(BR)/edit_stub.o \
-#\
-#$(BR)/imgui_impl_sdl2.o \
-#$(BR)/imgui_impl_opengl2.o \
-#$(BR)/imgui.o \
-#$(BR)/imgui_draw.o \
-#$(BR)/imgui_tables.o \
-#$(BR)/imgui_widgets.o \
-#$(BR)/imgui_demo.o \
-#$(BR)/sys_imgui.o \
-#$(BR)/imgui_savestyle.o \
+\
+$(BIM)/imgui_impl_sdl3.o \
+$(BIM)/imgui_impl_opengl2.o \
+$(BIM)/imgui.o \
+$(BIM)/imgui_draw.o \
+$(BIM)/imgui_tables.o \
+$(BIM)/imgui_widgets.o \
+$(BIM)/imgui_demo.o \
+$(BR)/sys_imgui.o \
+$(BR)/imgui_savestyle.o \
 
 
 IDLIB = $(B)/idlib.a
@@ -423,7 +428,7 @@ BASE = $(B)/base.so
 D3XP = $(B)/d3xp.so
 DOOM = $(B)/doom3
 
-LIBS = $(IDLIB) -noixemul -L/gg/usr/local/lib -lopenal0 -lSDL2 -lpthread -ldll -lGL -lc -lm
+LIBS = $(IDLIB) -noixemul -L/gg/usr/local/lib -lopenal -lSDL3 -lpthread -ldll -lGL -lc -lm
 
 all: $(IDLIB) $(BASE) $(D3XP) $(DOOM)  
 
@@ -447,6 +452,7 @@ $(B3)/.created:
 	
 $(BR)/.created:
 	mkdir -p $(BR)
+	mkdir -p $(BIM)
 	touch $@
 
 $(BID)/.created:
@@ -1236,21 +1242,21 @@ $(B3)/dllglue.o: neo/sys/morphos/dllglue.c
 	$(DO_CC)
 
 #IMGUI
-$(BR)/imgui_impl_sdl2.o: libs/imgui/backends/imgui_impl_sdl2.cpp
-	$(DO_CXX_XP)
-$(BR)/imgui_impl_opengl2.o: libs/imgui/backends/imgui_impl_opengl2.cpp
-	$(DO_CXX_XP)
-$(BR)/imgui.o: libs/imgui/imgui.cpp
-	$(DO_CXX_XP)
-$(BR)/imgui_draw.o: libs/imgui/imgui_draw.cpp
-	$(DO_CXX_XP)
-$(BR)/imgui_tables.o: libs/imgui/imgui_tables.cpp
-	$(DO_CXX_XP)
-$(BR)/imgui_widgets.o: libs/imgui/imgui_widgets.cpp
-	$(DO_CXX_XP)
-$(BR)/imgui_demo.o: libs/imgui/imgui_demo.cpp
-	$(DO_CXX_XP)	
-$(BR)/sys_imgui.o: sys/sys_imgui.cpp
-	$(DO_CXX_XP)		
-$(BR)/imgui_savestyle.o: sys/imgui_savestyle.cpp
-	$(DO_CXX_XP)			
+$(BIM)/imgui_impl_sdl3.o: neo/libs/imgui/backends/imgui_impl_sdl3.cpp
+	$(DO_CXX)
+$(BIM)/imgui_impl_opengl2.o: neo/libs/imgui/backends/imgui_impl_opengl2.cpp
+	$(DO_CXX)
+$(BIM)/imgui.o: neo/libs/imgui/imgui.cpp
+	$(DO_CXX)
+$(BIM)/imgui_draw.o: neo/libs/imgui/imgui_draw.cpp
+	$(DO_CXX)
+$(BIM)/imgui_tables.o: neo/libs/imgui/imgui_tables.cpp
+	$(DO_CXX)
+$(BIM)/imgui_widgets.o: neo/libs/imgui/imgui_widgets.cpp
+	$(DO_CXX)
+$(BIM)/imgui_demo.o: neo/libs/imgui/imgui_demo.cpp
+	$(DO_CXX)	
+$(BR)/sys_imgui.o: neo/sys/sys_imgui.cpp
+	$(DO_CXX)		
+$(BR)/imgui_savestyle.o: neo/sys/imgui_savestyle.cpp
+	$(DO_CXX)			

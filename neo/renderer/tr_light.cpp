@@ -555,8 +555,10 @@ void idRenderWorldLocal::CreateLightDefInteractions( idRenderLightLocal *ldef ) 
 	portalArea_t	*area;
 	idInteraction	*inter;
 
+#ifdef __MORPHOS__
     const bool lightCastsShadows = ldef->lightShader->LightCastsShadows(); // Cowcat
-
+#endif
+    
 	for ( lref = ldef->references ; lref ; lref = lref->ownerNext ) {
 		area = lref->area;
 
@@ -571,8 +573,13 @@ void idRenderWorldLocal::CreateLightDefInteractions( idRenderLightLocal *ldef ) 
 			// if the entity isn't viewed
 			if ( tr.viewDef && edef->viewCount != tr.viewCount ) {
 				// if the light doesn't cast shadows, skip
-				//if ( !ldef->lightShader->LightCastsShadows() ) {
+#ifdef __MORPHOS__
 				if ( !lightCastsShadows ) { // Cowcat
+#else
+				if ( !ldef->lightShader->LightCastsShadows() ) {
+#endif
+			
+
 					continue;
 				}
 				// if we are suppressing its shadow in this view, skip

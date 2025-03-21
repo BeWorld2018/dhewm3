@@ -101,7 +101,11 @@ void RB_PrepareStageTexturing( const shaderStage_t *pStage,  const drawSurf_t *s
 	if ( pStage->texture.texgen == TG_SKYBOX_CUBE || pStage->texture.texgen == TG_WOBBLESKY_CUBE ) {
 		qglTexCoordPointer( 3, GL_FLOAT, 0, vertexCache.Position( surf->dynamicTexCoords ) );
 	}
-	if ( pStage->texture.texgen == TG_SCREEN || pStage->texture.texgen == TG_SCREEN2 ) { // used in Material.cpp ? - Cowcat
+	if ( pStage->texture.texgen == TG_SCREEN
+#ifdef __MORPHOS__
+	 || pStage->texture.texgen == TG_SCREEN2 
+#endif
+	) { // used in Material.cpp ? - Cowcat
 		qglEnable( GL_TEXTURE_GEN_S );
 		qglEnable( GL_TEXTURE_GEN_T );
 		qglEnable( GL_TEXTURE_GEN_Q );
@@ -128,7 +132,7 @@ void RB_PrepareStageTexturing( const shaderStage_t *pStage,  const drawSurf_t *s
 		qglTexGenfv( GL_Q, GL_OBJECT_PLANE, plane );
 	}
 
-    #if 0
+#ifndef __MORPHOS__
 	if ( pStage->texture.texgen == TG_SCREEN2 ) {
 		qglEnable( GL_TEXTURE_GEN_S );
 		qglEnable( GL_TEXTURE_GEN_T );
@@ -273,13 +277,13 @@ void RB_FinishStageTexturing( const shaderStage_t *pStage, const drawSurf_t *sur
 		qglDisable( GL_TEXTURE_GEN_T );
 		qglDisable( GL_TEXTURE_GEN_Q );
 	}
-	#if 0
+#ifndef __MORPHOS__
 	if ( pStage->texture.texgen == TG_SCREEN2 ) {
 		qglDisable( GL_TEXTURE_GEN_S );
 		qglDisable( GL_TEXTURE_GEN_T );
 		qglDisable( GL_TEXTURE_GEN_Q );
 	}
-    #endif
+#endif
 	if ( pStage->texture.texgen == TG_GLASSWARP ) {
 		if ( tr.backEndRenderer == BE_ARB2 /*|| tr.backEndRenderer == BE_NV30*/ ) {
 			GL_SelectTexture( 2 );
@@ -318,7 +322,9 @@ void RB_FinishStageTexturing( const shaderStage_t *pStage, const drawSurf_t *sur
 			qglDisable( GL_FRAGMENT_PROGRAM_ARB );
 			qglDisable( GL_VERTEX_PROGRAM_ARB );
 			// Fixme: Hack to get around an apparent bug in ATI drivers.  Should remove as soon as it gets fixed.
-			//qglBindProgramARB( GL_VERTEX_PROGRAM_ARB, 0 );
+#ifndef __MORPHOS__
+			qglBindProgramARB( GL_VERTEX_PROGRAM_ARB, 0 );
+#endif
 		} else {
 			qglDisable( GL_TEXTURE_GEN_S );
 			qglDisable( GL_TEXTURE_GEN_T );
@@ -923,8 +929,9 @@ void RB_STD_T_RenderShaderPasses( const drawSurf_t *surf ) {
 			qglDisable( GL_VERTEX_PROGRAM_ARB );
 			qglDisable( GL_FRAGMENT_PROGRAM_ARB );
 			// Fixme: Hack to get around an apparent bug in ATI drivers.  Should remove as soon as it gets fixed.
-			//qglBindProgramARB( GL_VERTEX_PROGRAM_ARB, 0 );
-
+#ifndef __MORPHOS__
+			qglBindProgramARB( GL_VERTEX_PROGRAM_ARB, 0 );
+#endif
 			qglDisableClientState( GL_COLOR_ARRAY );
 			qglDisableVertexAttribArrayARB( 9 );
 			qglDisableVertexAttribArrayARB( 10 );
@@ -1841,9 +1848,9 @@ void RB_STD_FogAllLights( void ) {
 		 ) {
 		return;
 	}
-
-	//qglDisable( GL_STENCIL_TEST ); // not here ? Cowcat
-
+#ifndef __MORPHOS__
+	qglDisable( GL_STENCIL_TEST ); // not here ? Cowcat
+#endif
 	for ( vLight = backEnd.viewDef->viewLights ; vLight ; vLight = vLight->next ) {
 		backEnd.vLight = vLight;
 
@@ -1876,14 +1883,17 @@ void RB_STD_FogAllLights( void ) {
 		}
 #endif
 
-        qglDisable( GL_STENCIL_TEST ); // here ? Cowcat
-
+#ifdef __MORPHOS__
+		qglDisable( GL_STENCIL_TEST ); // here ? Cowcat
+#endif
 		if ( vLight->lightShader->IsFogLight() ) {
 			RB_FogPass( vLight->globalInteractions, vLight->localInteractions );
 		} else if ( vLight->lightShader->IsBlendLight() ) {
 			RB_BlendLight( vLight->globalInteractions, vLight->localInteractions );
 		}
-		//qglDisable( GL_STENCIL_TEST );
+#ifndef __MORPHOS__
+		qglDisable( GL_STENCIL_TEST );
+#endif
 	}
 
     if ( r_shadows.GetBool() ) // Cowcat

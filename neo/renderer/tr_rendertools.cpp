@@ -1094,7 +1094,7 @@ static void RB_ShowTangentSpace( drawSurf_t **drawSurfs, int numDrawSurfs ) {
 
 	GL_State( GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 
-    #if 0
+#ifndef __MORPHOS__
 
 	for ( i = 0 ; i < numDrawSurfs ; i++ ) {
 		drawSurf = drawSurfs[i];
@@ -1126,7 +1126,7 @@ static void RB_ShowTangentSpace( drawSurf_t **drawSurfs, int numDrawSurfs ) {
 		qglEnd();
 	}
 
-    #else // Cowcat
+#else // Cowcat
 
     for ( i = 0 ; i < numDrawSurfs ; i++ ) {
 		drawSurf = drawSurfs[i];
@@ -1153,7 +1153,7 @@ static void RB_ShowTangentSpace( drawSurf_t **drawSurfs, int numDrawSurfs ) {
 		qglEnd();
 	}
 
-    #endif
+#endif
 
 	GL_State( GLS_DEFAULT );
 }

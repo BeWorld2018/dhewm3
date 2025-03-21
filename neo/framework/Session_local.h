@@ -257,8 +257,9 @@ public:
 	idUserInterface *	guiIntro;
 	idUserInterface *	guiGameOver;
 	idUserInterface *	guiTest;
-	//idUserInterface *	guiTakeNotes;
-
+#ifndef __MORPHOS__
+	idUserInterface *	guiTakeNotes;
+#endif
 	idUserInterface *	guiMsg;
 	idUserInterface *	guiMsgRestore;				// store the calling GUI for restore
 	idStr				msgFireBack[ 2 ];
@@ -340,7 +341,9 @@ public:
 	void				HandleMsgCommands( const char *menuCommand );
 	void				HandleNoteCommands( const char *menuCommand );
 	void				GetSaveGameList( idStrList &fileList, idList<fileTIME_T> &fileTimes );
-	//void				TakeNotes( const char * p, bool extended = false );
+#ifndef __MORPHOS__
+	void				TakeNotes( const char * p, bool extended = false );
+#endif
 	void				UpdateMPLevelShot( void );
 
 	void				SetSaveGameGuiVars( void );

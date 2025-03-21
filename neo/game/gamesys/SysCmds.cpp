@@ -1341,7 +1341,7 @@ static void Cmd_CollisionModelInfo_f( const idCmdArgs &args ) {
 Cmd_ExportModels_f
 ==================
 */
-#if 0
+#ifndef __MORPHOS__
 static void Cmd_ExportModels_f( const idCmdArgs &args ) {
 	idModelExport	exporter;
 	idStr			name;
@@ -1367,7 +1367,7 @@ static void Cmd_ExportModels_f( const idCmdArgs &args ) {
 Cmd_ReexportModels_f
 ==================
 */
-#if 0
+#ifndef __MORPHOS__
 static void Cmd_ReexportModels_f( const idCmdArgs &args ) {
 	idModelExport	exporter;
 	idStr			name;
@@ -1986,7 +1986,7 @@ static void Cmd_SaveParticles_f( const idCmdArgs &args ) {
 Cmd_DisasmScript_f
 ==================
 */
-#if 0
+#ifndef __MORPHOS__
 static void Cmd_DisasmScript_f( const idCmdArgs &args ) {
 	gameLocal.program.Disassemble();
 }
@@ -2009,7 +2009,7 @@ static void Cmd_TestSave_f( const idCmdArgs &args ) {
 Cmd_RecordViewNotes_f
 ==================
 */
-#if 0
+#ifndef __MORPHOS__
 static void Cmd_RecordViewNotes_f( const idCmdArgs &args ) {
 	idPlayer *player;
 	idVec3 origin;
@@ -2054,7 +2054,7 @@ static void Cmd_RecordViewNotes_f( const idCmdArgs &args ) {
 Cmd_CloseViewNotes_f
 ==================
 */
-#if 0
+#ifndef __MORPHOS__
 static void Cmd_CloseViewNotes_f( const idCmdArgs &args ) {
 	idPlayer *player = gameLocal.GetLocalPlayer();
 
@@ -2071,7 +2071,7 @@ static void Cmd_CloseViewNotes_f( const idCmdArgs &args ) {
 Cmd_ShowViewNotes_f
 ==================
 */
-#if 0
+#ifndef __MORPHOS__
 static void Cmd_ShowViewNotes_f( const idCmdArgs &args ) {
 	static idLexer parser( LEXFL_ALLOWPATHNAMES | LEXFL_NOSTRINGESCAPECHARS | LEXFL_NOSTRINGCONCAT | LEXFL_NOFATALERRORS );
 	idToken	token;
@@ -2274,11 +2274,11 @@ void Cmd_NextGUI_f( const idCmdArgs &args ) {
 	player->Teleport( origin, angles, NULL );
 }
 
-/*
+#ifndef __MORPHOS__
 static void ArgCompletion_DefFile( const idCmdArgs &args, void(*callback)( const char *s ) ) {
 	cmdSystem->ArgCompletion_FolderExtension( args, callback, "def/", true, ".def", NULL );
 }
-*/
+#endif
 /*
 ===============
 Cmd_TestId_f
@@ -2370,7 +2370,9 @@ void idGameLocal::InitConsoleCommands( void ) {
 	cmdSystem->AddCommand( "script",				Cmd_Script_f,				CMD_FL_GAME|CMD_FL_CHEAT,	"executes a line of script" );
 	cmdSystem->AddCommand( "listCollisionModels",	Cmd_ListCollisionModels_f,	CMD_FL_GAME,				"lists collision models" );
 	cmdSystem->AddCommand( "collisionModelInfo",	Cmd_CollisionModelInfo_f,	CMD_FL_GAME,				"shows collision model info" );
-	//cmdSystem->AddCommand( "reexportmodels",		Cmd_ReexportModels_f,		CMD_FL_GAME|CMD_FL_CHEAT,	"reexports models", ArgCompletion_DefFile );
+#ifndef __MORPHOS__
+	cmdSystem->AddCommand( "reexportmodels",		Cmd_ReexportModels_f,		CMD_FL_GAME|CMD_FL_CHEAT,	"reexports models", ArgCompletion_DefFile );
+#endif
 	cmdSystem->AddCommand( "reloadanims",			Cmd_ReloadAnims_f,			CMD_FL_GAME|CMD_FL_CHEAT,	"reloads animations" );
 	cmdSystem->AddCommand( "listAnims",				Cmd_ListAnims_f,			CMD_FL_GAME,				"lists all animations" );
 	cmdSystem->AddCommand( "aasStats",				Cmd_AASStats_f,				CMD_FL_GAME,				"shows AAS stats" );
@@ -2387,11 +2389,13 @@ void idGameLocal::InitConsoleCommands( void ) {
 	cmdSystem->AddCommand( "clearLights",			Cmd_ClearLights_f,			CMD_FL_GAME|CMD_FL_CHEAT,	"clears all lights" );
 	cmdSystem->AddCommand( "gameError",				Cmd_GameError_f,			CMD_FL_GAME|CMD_FL_CHEAT,	"causes a game error" );
 
-	//cmdSystem->AddCommand( "disasmScript",			Cmd_DisasmScript_f,			CMD_FL_GAME|CMD_FL_CHEAT,	"disassembles script" );
-	//cmdSystem->AddCommand( "recordViewNotes",		Cmd_RecordViewNotes_f,		CMD_FL_GAME|CMD_FL_CHEAT,	"record the current view position with notes" );
-	//cmdSystem->AddCommand( "showViewNotes",			Cmd_ShowViewNotes_f,		CMD_FL_GAME|CMD_FL_CHEAT,	"show any view notes for the current map, successive calls will cycle to the next note" );
-	//cmdSystem->AddCommand( "closeViewNotes",		Cmd_CloseViewNotes_f,		CMD_FL_GAME|CMD_FL_CHEAT,	"close the view showing any notes for this map" );
-	//cmdSystem->AddCommand( "exportmodels",			Cmd_ExportModels_f,			CMD_FL_GAME|CMD_FL_CHEAT,	"exports models", ArgCompletion_DefFile );
+#ifndef __MORPHOS__
+	cmdSystem->AddCommand( "disasmScript",			Cmd_DisasmScript_f,			CMD_FL_GAME|CMD_FL_CHEAT,	"disassembles script" );
+	cmdSystem->AddCommand( "recordViewNotes",		Cmd_RecordViewNotes_f,		CMD_FL_GAME|CMD_FL_CHEAT,	"record the current view position with notes" );
+	cmdSystem->AddCommand( "showViewNotes",			Cmd_ShowViewNotes_f,		CMD_FL_GAME|CMD_FL_CHEAT,	"show any view notes for the current map, successive calls will cycle to the next note" );
+	cmdSystem->AddCommand( "closeViewNotes",		Cmd_CloseViewNotes_f,		CMD_FL_GAME|CMD_FL_CHEAT,	"close the view showing any notes for this map" );
+	cmdSystem->AddCommand( "exportmodels",			Cmd_ExportModels_f,			CMD_FL_GAME|CMD_FL_CHEAT,	"exports models", ArgCompletion_DefFile );
+#endif
 
 	// multiplayer client commands ( replaces old impulses stuff )
 	cmdSystem->AddCommand( "clientDropWeapon",		idMultiplayerGame::DropWeapon_f, CMD_FL_GAME,			"drop current weapon" );

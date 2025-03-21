@@ -13,10 +13,10 @@ RANLIB = ppc-morphos-ranlib
 
 PATH_SOURCE = ./
 
-CXX_FLAGS = -Wall -DNDEBUG -O2 -ffast-math -noixemul -fvisibility=hidden -fomit-frame-pointer -fno-strict-aliasing -Wno-sign-compare -Wno-switch -fpermissive -Wno-class-memaccess
-CC_FLAGS = -Wall -DNDEBUG -O2 -ffast-math -noixemul -fvisibility=hidden -fomit-frame-pointer -fno-strict-aliasing -Wno-sign-compare -Wno-switch
+CXX_FLAGS = -Wall -DNDEBUG -O2 -ffast-math -ffinite-math-only -noixemul -fvisibility=hidden -fomit-frame-pointer -fno-strict-aliasing -Wno-sign-compare -Wno-switch -fpermissive -Wno-class-memaccess -D_LARGEFILE64_SOURCE
+CC_FLAGS = -Wall -DNDEBUG -O2 -ffast-math -ffinite-math-only -noixemul -fvisibility=hidden -fomit-frame-pointer -fno-math-errno -fno-trapping-math -fno-strict-aliasing -Wno-sign-compare -Wno-switch -D_LARGEFILE64_SOURCE
 
-CXX_INCLUDES = -I$(PATH_SOURCE) -I$(PATH_SOURCE)neo -I$(PATH_SOURCE)neo/sys/morphos/OpenAL -I/gg/usr/local/include/SDL2 -I/gg/usr/local/include
+CXX_INCLUDES = -I$(PATH_SOURCE) -I$(PATH_SOURCE)neo -I/gg/usr/local/include/SDL2 -I/gg/usr/local/include
 CXX_INCLUDES_BASE = -I$(PATH_SOURCE) -I$(PATH_SOURCE)neo -I$(PATH_SOURCE)neo/game -I/gg/usr/local/include/SDL2
 CXX_INCLUDES_D3XP = -I$(PATH_SOURCE) -I$(PATH_SOURCE)neo -I$(PATH_SOURCE)neo/d3xp -I/gg/usr/local/include/SDL2
 CXX_DEFINES = -D__DOOM_DLL__
@@ -278,6 +278,7 @@ $(BR)/tr_subview.o \
 $(BR)/tr_trace.o \
 $(BR)/tr_trisurf.o \
 $(BR)/tr_turboshadow.o \
+$(BR)/stblib_impls.o \
 \
 $(BR)/CVarSystem.o \
 $(BR)/CmdSystem.o \
@@ -293,6 +294,7 @@ $(BR)/DeclParticle.o \
 $(BR)/DeclPDA.o \
 $(BR)/DeclSkin.o \
 $(BR)/DeclTable.o \
+$(BR)/Dhewm3SettingsMenu.o \
 $(BR)/EditField.o \
 $(BR)/EventLoop.o \
 $(BR)/File.o \
@@ -307,6 +309,7 @@ $(BR)/AsyncServer.o \
 $(BR)/MsgChannel.o \
 $(BR)/NetworkSystem.o \
 $(BR)/ServerScan.o \
+$(BR)/miniz.o \
 $(BR)/ioapi.o \
 $(BR)/unzip.o \
 \
@@ -368,6 +371,7 @@ $(BR)/snd_shader.o \
 $(BR)/snd_system.o \
 $(BR)/snd_wavefile.o \
 $(BR)/snd_world.o \
+$(BR)/stbvorbis_impl.o \
 \
 $(BR)/BindWindow.o \
 $(BR)/ChoiceWindow.o \
@@ -397,14 +401,25 @@ $(BR)/posix_net.o \
 $(BR)/posix_main.o \
 $(BR)/main.o \
 $(BR)/glimp.o \
-$(BR)/edit_stub.o
+$(BR)/edit_stub.o \
+\
+$(BR)/imgui_impl_sdl2.o \
+$(BR)/imgui_impl_opengl2.o \
+$(BR)/imgui.o \
+$(BR)/imgui_draw.o \
+$(BR)/imgui_tables.o \
+$(BR)/imgui_widgets.o \
+$(BR)/imgui_demo.o \
+$(BR)/sys_imgui.o \
+$(BR)/imgui_savestyle.o \
+
 
 IDLIB = $(B)/idlib.a
 BASE = $(B)/base.so
 D3XP = $(B)/d3xp.so
 DOOM = $(B)/doom3
 
-LIBS = $(IDLIB) -noixemul -L/gg/usr/local/lib -Lneo/sys/morphos -Lneo/sys/morphos/OpenAL -lopenal -lSDL2 -lpthread -ldll
+LIBS = $(IDLIB) -noixemul -L/gg/usr/local/lib -lopenal -lSDL2 -lpthread -ldll -lGL -lc -lm
 
 all: $(IDLIB) $(BASE) $(D3XP) $(DOOM)  
 
@@ -451,6 +466,9 @@ $(DOOM).db: $(OBJDOOM)
 
 $(DOOM): $(DOOM).db
 	$(STRIP) --strip-unneeded --remove-section=.comment $< -o $@
+
+dump:
+	objdump --disassemble-all --reloc $(DOOM).db >$(DOOM).db.s
 
 #RENDERER
 
@@ -556,6 +574,8 @@ $(BR)/tr_trisurf.o: neo/renderer/tr_trisurf.cpp
 	$(DO_CXX)
 $(BR)/tr_turboshadow.o: neo/renderer/tr_turboshadow.cpp
 	$(DO_CXX)
+$(BR)/tr_turboshadow.o: neo/renderer/stblib_impls.c
+	$(DO_C)		
 
 #FRAMEWORK
 
@@ -587,6 +607,8 @@ $(BR)/DeclSkin.o: neo/framework/DeclSkin.cpp
 	$(DO_CXX)
 $(BR)/DeclTable.o: neo/framework/DeclTable.cpp
 	$(DO_CXX)
+$(BR)/DeclTable.o: neo/framework/Dhewm3SettingsMenu.cpp
+	$(DO_CXX)
 $(BR)/EditField.o: neo/framework/EditField.cpp
 	$(DO_CXX)
 $(BR)/EventLoop.o:  neo/framework/EventLoop.cpp
@@ -616,6 +638,8 @@ $(BR)/NetworkSystem.o: neo/framework/async/NetworkSystem.cpp
 $(BR)/ServerScan.o: neo/framework/async/ServerScan.cpp
 	$(DO_CXX)
 $(BR)/ioapi.o: neo/framework/minizip/ioapi.c
+	$(DO_CC)
+$(BR)/miniz.o: neo/framework/miniz/miniz.c
 	$(DO_CC)
 $(BR)/unzip.o: neo/framework/minizip/unzip.cpp
 	$(DO_CXX)
@@ -751,6 +775,8 @@ $(BR)/snd_system.o: neo/sound/snd_system.cpp
 $(BR)/snd_wavefile.o: neo/sound/snd_wavefile.cpp
 	$(DO_CXX)
 $(BR)/snd_world.o: neo/sound/snd_world.cpp
+	$(DO_CXX)
+$(BR)/stbvorbis_impl.o: neo/sound/stbvorbis_impl.c
 	$(DO_CXX)
 
 #UI
@@ -1204,3 +1230,22 @@ $(B3)/Force_Grab.o: neo/d3xp/physics/Force_Grab.cpp
 $(B3)/dllglue.o: neo/sys/morphos/dllglue.c
 	$(DO_CC)
 
+#IMGUI
+$(BR)/imgui_impl_sdl2.o: libs/imgui/backends/imgui_impl_sdl2.cpp
+	$(DO_CXX_XP)
+$(BR)/imgui_impl_opengl2.o: libs/imgui/backends/imgui_impl_opengl2.cpp
+	$(DO_CXX_XP)
+$(BR)/imgui.o: libs/imgui/imgui.cpp
+	$(DO_CXX_XP)
+$(BR)/imgui_draw.o: libs/imgui/imgui_draw.cpp
+	$(DO_CXX_XP)
+$(BR)/imgui_tables.o: libs/imgui/imgui_tables.cpp
+	$(DO_CXX_XP)
+$(BR)/imgui_widgets.o: libs/imgui/imgui_widgets.cpp
+	$(DO_CXX_XP)
+$(BR)/imgui_demo.o: libs/imgui/imgui_demo.cpp
+	$(DO_CXX_XP)	
+$(BR)/sys_imgui.o: sys/sys_imgui.cpp
+	$(DO_CXX_XP)		
+$(BR)/imgui_savestyle.o: sys/imgui_savestyle.cpp
+	$(DO_CXX_XP)			

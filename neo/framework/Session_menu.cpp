@@ -1554,7 +1554,7 @@ void idSessionLocal::HandleMsgCommands( const char *menuCommand ) {
 idSessionLocal::HandleNoteCommands
 =================
 */
-#if 0
+#ifndef __MORPHOS__
 #define NOTEDATFILE "C:/notenumber.dat"
 
 void idSessionLocal::HandleNoteCommands( const char *menuCommand ) {

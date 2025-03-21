@@ -1442,7 +1442,7 @@ void Com_ExecMachineSpec_f( const idCmdArgs &args ) {
 			cvarSystem->SetCVarInteger( "r_mode", 5, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "image_useNormalCompression", 0, CVAR_ARCHIVE );
 		cvarSystem->SetCVarInteger( "r_multiSamples", 0, CVAR_ARCHIVE );
-		cvarSystem->SetCVarInteger( "r_useSoftParticles", 1, CVAR_ARCHIVE ); // DG: enable soft particles for ultra preset
+		cvarSystem->SetCVarInteger( "r_useSoftParticles", 0, CVAR_ARCHIVE ); // DG: enable soft particles for ultra preset // beworld disable it
 	} else if ( com_machineSpec.GetInteger() == 2 ) { // high
 		cvarSystem->SetCVarString( "image_filter", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE );
 		//cvarSystem->SetCVarInteger( "image_anisotropy", 1, CVAR_ARCHIVE ); DG: redundant, set again below
