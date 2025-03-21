@@ -96,6 +96,7 @@ namespace DG {
 	D3_IMATTR_VEC2(  WindowPadding               ) \
 	D3_IMATTR_FLOAT( WindowRounding              ) \
 	D3_IMATTR_FLOAT( WindowBorderSize            ) \
+	D3_IMATTR_FLOAT( WindowBorderHoverPadding	 ) \
 	D3_IMATTR_VEC2(  WindowMinSize               ) \
 	D3_IMATTR_VEC2(  WindowTitleAlign            ) \
 	D3_IMATTR_DIR(   WindowMenuButtonPosition    ) \
@@ -117,9 +118,11 @@ namespace DG {
 	D3_IMATTR_FLOAT( GrabMinSize                 ) \
 	D3_IMATTR_FLOAT( GrabRounding                ) \
 	D3_IMATTR_FLOAT( LogSliderDeadzone           ) \
+	D3_IMATTR_FLOAT( ImageBorderSize			 ) \
 	D3_IMATTR_FLOAT( TabRounding                 ) \
 	D3_IMATTR_FLOAT( TabBorderSize               ) \
-	D3_IMATTR_FLOAT( TabMinWidthForCloseButton   ) \
+	D3_IMATTR_FLOAT( TabCloseButtonMinWidthSelected	) \
+	D3_IMATTR_FLOAT( TabCloseButtonMinWidthUnselected   ) \
 	D3_IMATTR_FLOAT( TabBarBorderSize            ) \
 	D3_IMATTR_FLOAT( TabBarOverlineSize          ) \
 	D3_IMATTR_FLOAT( TableAngledHeadersAngle     ) \

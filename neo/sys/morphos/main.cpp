@@ -33,7 +33,9 @@ If you have questions concerning this license or the applicable additional terms
 #include <sys/types.h>
 #include <fcntl.h>
 
-#include <SDL_main.h>
+#ifndef IMGUI_DISABLE
+#include <SDL3/SDL.h>
+#endif
 
 #include "sys/platform.h"
 #include "framework/Licensee.h"
@@ -56,6 +58,18 @@ extern "C"
 }
 
 #define DEFAULT_PATH ""
+
+#ifndef IMGUI_DISABLE
+int D3_snprintfC99(char *dst, size_t size, const char *format, ...)
+{
+	int ret = 0;
+	va_list argptr;
+	va_start( argptr, format );
+	ret = SDL_vsnprintf(dst, size, format, argptr);
+	va_end( argptr );
+	return ret;
+}
+#endif
 
 bool Sys_GetPath(sysPath_t type, idStr &path)
 {
