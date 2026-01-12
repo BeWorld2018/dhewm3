@@ -8,7 +8,31 @@ Note: Numbers starting with a "#" like #330 refer to the bugreport with that num
 ------------------------------------------------------------------------
 
 * Enable/disable Soft Particles when **loading** a graphics quality preset (only enabled in Ultra preset,
-  though you can still configure it independently as before; #604)
+  though you can still configure it independently like before; #604)
+* Greatly improve precision of internal timing, which should eliminate micro stutters
+  (that were esp. noticeable when using VSync with 60Hz displays).  
+  Related: `com_showFPS` is now more precise and `com_showFPS 2` shows additional information
+* Support BC7-compressed (BPTC) .dds textures. They offer better quality than the older S3TC/DXT/BC1-3
+  texture compression standard that Doom3 always supported. Mostly relevant for high-res retexturing
+  packs, because they offer similar quality as uncompressed TGAs while being smaller, using only
+  a quarter of the VRAM (TGA: 4 bytes per pixel, BC7: 1 byte per pixel) and loading *significantly*
+  faster because mipmaps are contained and don't have to be generated on load.  
+  If you have such DDS files and want to use them (instead of TGAs), you must set
+  `image_usePrecompressedTextures 1` and `image_useNormalCompression 2`.  
+  You can also set `image_usePrecompressedTextures 2`, then dhewm3 will only load .dds textures
+  with BC7 data - if it only finds an old one (with S3TC/DXT/BC-13 compression) it will use the 
+  uncompressed TGA textures instead.  
+  If you want to *create* .dds files with BC7 texture data, you can use any common texture compression
+  tool, **except** for **normalmaps**, those must be created with my
+  [**customized bc7enc**](https://github.com/DanielGibson/bc7enc_rdo) with the `-r2a` flag!
+  *(Because Doom3 requires that normalmaps have the red channel moved into the alpha channel,
+  id confusingly called that "RXGB", and AFAIK no other tool supports that for BC7.)*  
+  Just like the old DXT .dds files, they must be in the `dds/` subdirectory of a mod (either directly
+  in the filesystem or in a .pk4).
+* Allow creating aspect-ratio-independent GUIs (HUD and menus), based on code from
+  [CstDoom3](https://www.moddb.com/mods/cstdoom3), but greatly extended (#324).  
+  Note that this won't work out of the box with the original Doom3 game data, but requires updated GUIs.
+  See [docs/GUIs.md](docs/GUIs.md) for how to use these features when creating GUIs.
 * Support SDL3 (SDL2 and, to some degree, SDL1.2 are also still supported)
 * Fix bugs on 64bit Big Endian platforms (#472, #625)
 * Fixes for high-poly models (use heap allocation instead of `alloca()` for big buffers; #528)
@@ -20,7 +44,7 @@ Note: Numbers starting with a "#" like #330 refer to the bugreport with that num
 * Fix a crash (assertion) on start with ImGui if `SDL_GetWindowDisplayIndex()`
   or `SDL_GetDisplayDPI()` failed and the `imgui_scale` CVar was set to the default value of `-1`
   (setting it to `1` worked around the bug; #632)
-* Updated Dear ImGui to 1.91.4
+* Updated Dear ImGui to 1.91.7
 * Fix scaling of Grabber cursor in Resurrection of Evil in non-4:3 resolutions (#637)
 * Add `com_disableAutoSaves` CVar: If set to `1`, Autosaves (when starting a level) are disabled (#620)
 * Add support for "nospecular" parm of lights, enabled by setting `"allow_nospecular" "1"` in a maps
@@ -32,6 +56,18 @@ Note: Numbers starting with a "#" like #330 refer to the bugreport with that num
 * Windows: Show error MessageBox if dhewm3log.txt can't be created on startup (#544)
 * Running a timedemo with sound disabled (`s_noSound 1`) doesn't crash anymore (#163)
 * Show some OpenGL/GPU information in the *Video Options* tab of the *dhewm3 Settings Menu*
+* Fix saving/loading of `idSpring` (`func_spring`) entity (#31)
+* Fix several issues (incl. crashes and missing shadows) with MD3 models (#698)
+* Fix the "shrivel" effect of MD5 models (`SHADERPARM_MD5_SKINSCALE`)
+* Optionally integrate the [Tracy](https://github.com/wolfpld/tracy) profiler.
+  Disabled unless you enable it in CMake.
+* Fixed a crash in AI pathfinding code that could happen in the lotsaimps testmap (#721)
+* Disabled assertion in `TestHugeTranslation()` that led to "crashes" in several user-maps (#720)
+* Fixed concatenation of timed GUI commands that sometimes lead to glitches in UIs
+* Added `fs_gameDllPath` CVar: If set, game DLLs will be searched in that directory before the other
+  standard places (like next to the executable). Especially useful for developing/debugging mod DLLs
+  (you can just set `fs_gameDllPath` to the build dir, no need to copy the DLL/.so/.dylib)
+* Several smaller fixes for all kinds of things incl. build issues
 
 1.5.4 (2024-08-03)
 ------------------------------------------------------------------------

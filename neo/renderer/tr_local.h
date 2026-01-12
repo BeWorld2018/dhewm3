@@ -1131,10 +1131,12 @@ const int GRAB_ENABLETEXTINPUT = (1 << 3); // only used with SDL3, where textinp
 void GLimp_GrabInput(int flags);
 
 bool GLimp_SetSwapInterval( int swapInterval );
+int GLimp_GetSwapInterval();
 bool GLimp_SetWindowResizable( bool enableResizable );
 void GLimp_UpdateWindowSize();
 
 glimpParms_t GLimp_GetCurState();
+float GLimp_GetDisplayRefresh();
 
 /*
 ====================================================================
@@ -1499,6 +1501,8 @@ void				R_ResizeStaticTriSurfShadowVerts( srfTriangles_t *tri, int numVerts );
 void				R_ReferenceStaticTriSurfVerts( srfTriangles_t *tri, const srfTriangles_t *reference );
 void				R_ReferenceStaticTriSurfIndexes( srfTriangles_t *tri, const srfTriangles_t *reference );
 void				R_FreeStaticTriSurfSilIndexes( srfTriangles_t *tri );
+void				R_FreeStaticTriSurfSilEdges( srfTriangles_t *tri );
+void				R_FreeStaticTriSurfIndexes( srfTriangles_t *tri );
 void				R_FreeStaticTriSurf( srfTriangles_t *tri );
 void				R_FreeStaticTriSurfVertexCaches( srfTriangles_t *tri );
 void				R_ReallyFreeStaticTriSurf( srfTriangles_t *tri );
@@ -1508,6 +1512,7 @@ int					R_TriSurfMemory( const srfTriangles_t *tri );
 void				R_BoundTriSurf( srfTriangles_t *tri );
 void				R_RemoveDuplicatedTriangles( srfTriangles_t *tri );
 void				R_CreateSilIndexes( srfTriangles_t *tri );
+void				R_IdentifySilEdges( srfTriangles_t *tri, bool omitCoplanarEdges );
 void				R_RemoveDegenerateTriangles( srfTriangles_t *tri );
 void				R_RemoveUnusedVerts( srfTriangles_t *tri );
 void				R_RangeCheckIndexes( const srfTriangles_t *tri );
