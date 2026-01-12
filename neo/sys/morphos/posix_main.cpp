@@ -453,6 +453,57 @@ int Sys_GetDriveFreeSpace( const char *path )
 	return 1000 * 1024;
 }
 
+// ---------- Time Stuff -------------
+
+#define D3_GETTIME_CLOCK CLOCK_MONOTONIC
+static struct timespec first;
+static void Posix_InitTime() {
+
+	struct timespec now;
+	clock_gettime(D3_GETTIME_CLOCK, &now);
+
+	long nsec = now.tv_nsec;
+	long long sec = now.tv_sec;
+	// set back first by 1.5ms so neither Sys_MillisecondsPrecise() nor Sys_Milliseconds()
+	// (which calls Sys_MillisecondsPrecise()) will ever return 0 or even a negative value
+	nsec -= 1500000;
+	if(nsec < 0)
+	{
+		nsec += 1000000000ll; // 1s in ns => definitely positive now
+		--sec;
+	}
+
+	first.tv_sec = sec;
+	first.tv_nsec = nsec;
+}
+
+/*
+=======================
+Sys_MillisecondsPrecise
+=======================
+*/
+double Sys_MillisecondsPrecise() {
+
+	struct timespec now;
+	clock_gettime(D3_GETTIME_CLOCK, &now);
+
+	long long sec = now.tv_sec - first.tv_sec;
+	long nsec = now.tv_nsec - first.tv_nsec;
+
+	double ret = sec * 1000.0;
+	ret += double(nsec) * 0.000001;
+	return ret;
+}
+
+void Sys_SleepUntilPrecise( double targetTimeMS ) {
+	double now = Sys_MillisecondsPrecise();
+	double msToWait = targetTimeMS - now;
+	if ( msToWait > 0.1 ) {
+		unsigned long usec = msToWait * 1000;
+		usleep( usec - 100 ); // sleep 100usec less so we don't oversleep that much
+	}
+}
+
 #if 0
 
 // ----------- lots of signal handling stuff ------------
@@ -542,6 +593,7 @@ static void installSigHandler(int sig, int flags, void (*handler)(int))
 
 void Posix_InitSignalHandlers( void )
 {
+	Posix_InitTime(); // the base time for Sys_MillisecondsPrecise() should be set very early
 	for(int i=0; i<sizeof(crashSigs)/sizeof(crashSigs[0]); ++i)
 	{
 		installSigHandler(crashSigs[i], SA_RESTART|SA_RESETHAND, signalhandlerCrash);
