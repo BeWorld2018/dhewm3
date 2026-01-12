@@ -61,6 +61,8 @@ option(SDL3			"Use SDL3 instead of SDL2 or SDL1.2" OFF)
 option(IMGUI		"Build with Dear ImGui integration - requires SDL2/SDL3 and C++11" ON)
 option(REPRODUCIBLE_BUILD "Replace __DATE__ and __TIME__ by hardcoded values for reproducible builds" OFF)
 
+option(TRACY		"Build and integrate the Tracy profiler, requires HARDLINK_GAME" OFF)
+
 option(HARDLINK_GAME "Compile gamecode into executable (no game DLLs)" OFF)
 
 if(NOT MSVC) # GCC/clang or compatible, hopefully
@@ -235,6 +237,9 @@ if(IMGUI)
 		# we need C++11 for ImGui
 		set (CMAKE_CXX_STANDARD 11)
 		message(STATUS "Dear ImGui integration enabled")
+		if(AROS)
+			add_definitions(-DIMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS)
+		endif()
 	else()
 		message(WARNING "Disabling IMGUI because SDL1.2 is used - it needs SDL2 or SDL3!")
 		set(IMGUI OFF)
@@ -243,6 +248,11 @@ if(IMGUI)
 else()
 	message(STATUS "Dear ImGui integration disabled")
 	add_definitions(-DIMGUI_DISABLE)
+endif()
+
+if(DEFINED ENV{MSYSTEM})
+	message(STATUS "Detected MSYS or similar environment. Using alternate curl path")
+	set(CURL_NO_CURL_CMAKE ON)
 endif()
 
 find_package(CURL QUIET)
@@ -255,6 +265,41 @@ else()
 	set(ID_ENABLE_CURL OFF)
 	set(CURL_LIBRARY "")
 endif()
+
+if(TRACY)
+	if(CMAKE_MAJOR_VERSION LESS 3 OR ( CMAKE_MAJOR_VERSION EQUAL 3 AND CMAKE_MINOR_VERSION LESS 11 ))
+		message(WARNING "To build with support for Tracy, CMake 3.11 or newer is required (for the FetchContent module)!")
+		unset(TRACY)
+	else()
+		add_definitions(-DTRACY_ENABLE=1)
+		# on demand has some overhead per sample, but when it's disabled and dhewm3 is started
+		# without the viewer it'll cache all the measurement data until the viewer connects
+		# which will eat lots of RAM (growing the longer the game runs)
+		add_definitions(-DTRACY_ON_DEMAND=1)
+		option(TRACY_ENABLE "" ON)
+		include(FetchContent)
+		FetchContent_Declare(
+			tracy
+			GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+			GIT_TAG v0.12.2
+			#GIT_TAG master
+			GIT_SHALLOW TRUE
+			GIT_PROGRESS TRUE
+		)
+		FetchContent_MakeAvailable(tracy)
+
+		# make sure tracy/Tracy.hpp can be included everywhere, not just in dhewm3(ded) source
+		FetchContent_GetProperties(tracy SOURCE_DIR tracy_src)
+		include_directories("${tracy_src}/public")
+
+		# link it into the executables
+		set(sys_libs ${sys_libs} TracyClient)
+
+		# to get calltraces for every sampled "zone" (expensive!)
+		#add_definitions(-DTRACY_CALLSTACK=10)
+	endif()
+endif()
+
 
 set(D3_COMPILER_IS_CLANG FALSE)
 set(D3_COMPILER_IS_GCC_OR_CLANG FALSE)
@@ -365,7 +410,7 @@ if(D3_COMPILER_IS_GCC_OR_CLANG)
 		set(sys_libs ${sys_libs} -fsanitize=undefined)
 	endif()
 
-	if(NOT AROS)
+	if(NOT AROS AND NOT WIN32)
 		CHECK_CXX_COMPILER_FLAG("-fvisibility=hidden" cxx_has_fvisibility)
 		if(NOT cxx_has_fvisibility)
 			message(FATAL_ERROR "Compiler does not support -fvisibility")
@@ -376,6 +421,11 @@ if(D3_COMPILER_IS_GCC_OR_CLANG)
 	# TODO fix these warnings
 	add_compile_options(-Wno-sign-compare)
 	add_compile_options(-Wno-switch)
+
+	CHECK_CXX_COMPILER_FLAG("-Wdangling-reference" cxx_has_Wdangling_reference)
+	if(cxx_has_Wdangling_reference)
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror=dangling-reference")
+	endif()
 
 	CHECK_CXX_COMPILER_FLAG("-Woverloaded-virtual" cxx_has_Woverload_virtual)
 	if(cxx_has_Woverload_virtual)
@@ -1117,13 +1167,7 @@ endif()
 
 if(AROS)
 	set(DHEWM3BINARY "ADoom3")
-	set(sys_libs ${sys_libs} dll)
-
-	set(src_arosdll
-		sys/aros/dll/dllstartup.c
-		sys/aros/dll/dll.c
-		sys/aros/dll/dllimport.c
-	)
+	set(sys_libs ${sys_libs} dynmod)
 
 	set(src_sys_base
 		sys/cpu.cpp
@@ -1133,6 +1177,8 @@ if(AROS)
 		sys/aros/aros_net.cpp
 		sys/aros/aros_signal.cpp
 		sys/aros/aros_main.cpp
+		 sys/aros/aros_dynmodcommon.cpp
+		sys/aros/aros_support.cpp
 		sys/aros/aros_dos.cpp
 	)
 
@@ -1226,10 +1272,9 @@ if(SDL3)
 	target_link_libraries(idlib SDL3::Headers) # so it can use SDL_Endian.h
 endif()
 if (AROS)
-	add_library(dll STATIC ${src_arosdll})
-        if(CMAKE_SYSTEM_PROCESSOR STREQUAL "i386")
+	if(CMAKE_SYSTEM_PROCESSOR STREQUAL "i386")
 		set(AROS_ARCH "x86")
-        else()
+	else()
 		set(AROS_ARCH ${CMAKE_SYSTEM_PROCESSOR})
 	endif()
 else()
@@ -1334,7 +1379,8 @@ endif()
 
 if(BASE AND NOT HARDLINK_GAME)
 	if (AROS)
-		add_executable(base sys/aros/dll/dllglue.c ${src_game})
+		add_executable(base ${src_game} sys/aros/aros_dynmodule.cpp sys/aros/aros_dynmodcommon.cpp)
+		target_link_libraries(base idlib dynmodglue)
 		set_target_properties(base PROPERTIES OUTPUT_NAME "base.aros-${AROS_ARCH}")
 	else()
 		add_library(base SHARED ${src_game})
@@ -1348,7 +1394,7 @@ if(BASE AND NOT HARDLINK_GAME)
 	set_target_properties(base PROPERTIES LINK_FLAGS "${ldflags}")
 	set_target_properties(base PROPERTIES INSTALL_NAME_DIR "@executable_path")
 	if (AROS)
-		target_link_libraries(base idlib dll)
+		target_link_libraries(base idlib dynmod)
 	else()
 		target_link_libraries(base idlib)
 	endif()
@@ -1364,7 +1410,8 @@ endif()
 
 if(D3XP AND NOT HARDLINK_GAME)
 	if (AROS)
-		add_executable(d3xp sys/aros/dll/dllglue.c ${src_d3xp})
+		add_executable(d3xp ${src_d3xp} sys/aros/aros_dynmodule.cpp sys/aros/aros_dynmodcommon.cpp)
+		target_link_libraries(d3xp dynmodglue)
 		set_target_properties(d3xp PROPERTIES OUTPUT_NAME "d3xp.aros-${AROS_ARCH}")
 	else()
 		add_library(d3xp SHARED ${src_d3xp})
@@ -1376,7 +1423,7 @@ if(D3XP AND NOT HARDLINK_GAME)
 	set_target_properties(d3xp PROPERTIES LINK_FLAGS "${ldflags}")
 	set_target_properties(d3xp PROPERTIES INSTALL_NAME_DIR "@executable_path")
 	if (AROS)
-		target_link_libraries(d3xp idlib dll)
+		target_link_libraries(d3xp idlib dynmod)
 	else()
 		target_link_libraries(d3xp idlib)
 	endif()
