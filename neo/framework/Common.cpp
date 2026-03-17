@@ -2552,18 +2552,28 @@ void idCommonLocal::Frame( void ) {
 		// set idLib frame number for frame based memory dumps
 		idLib::frameNumber = com_frameNumber;
 
-		if ( com_timescale.GetFloat() == 1.0f && GLimp_GetSwapInterval() != 0
-		     && fabsf(60.0f - GLimp_GetDisplayRefresh()) < 1.0f ) {
-			// if we're using vsync and the display is running at about 60Hz, start next tic
-			// immediately so our internal tic time and vsync don't drift apart
-			double now = Sys_MillisecondsPrecise();
-			if(nextTicTime > now) {
-				nextTicTime = now;
-			} // else a new tic is started anyway (which often means that this frame was too long)
-		} else if ( com_ticNumber == ticNumAtStart ) {
-			Com_WaitForNextTicStart();
+#if defined(_WIN32) && defined(ID_ALLOW_TOOLS)
+		// DG: when Radiant is open (unsure about other editors), sleeping here until
+		//   the next frame start somehow makes camera updates (in 2D and 3D windows) crawl?!
+		//   Doesn't *really* make sense (the editor updates run before common->Frame()),
+		//   but what can you do.. maybe MFC just doesn't like sleeping, maybe too many events pile up?
+		if ( com_editors == 0 )
+#endif
+		{
+			if ( com_timescale.GetFloat() == 1.0f && GLimp_GetSwapInterval() != 0
+				&& fabsf(60.0f - GLimp_GetDisplayRefresh()) < 1.0f ) {
+				// if we're using vsync and the display is running at about 60Hz, start next tic
+				// immediately so our internal tic time and vsync don't drift apart
+				double now = Sys_MillisecondsPrecise();
+				if ( nextTicTime > now ) {
+					nextTicTime = now;
+				} // else a new tic is started anyway (which often means that this frame was too long)
+			}
+			else if ( com_ticNumber == ticNumAtStart ) {
+				Com_WaitForNextTicStart();
+			}
+			// else the com_ticNumber has already been updated and it's past time to start the next frame
 		}
-		// else the com_ticNumber has already been updated and it's past time to start the next frame
 
 		D3P_FRAMEMARK // tell profiler (tracy) that this is the end of a frame
 	}
@@ -3040,6 +3050,15 @@ void idCommonLocal::Init( int argc, char **argv ) {
 	 *  * https://github.com/libsdl-org/SDL/issues/4039
 	 *  * https://github.com/libsdl-org/SDL/issues/3656 */
 	SDL_SetHint( SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "1" );
+  #ifdef SDL_HINT_ENABLE_SCREEN_KEYBOARD
+	SDL_SetHint( SDL_HINT_ENABLE_SCREEN_KEYBOARD, "0" );
+  #else
+	// fallback for older SDL2 versions, maybe at least the runtime version is new enough
+	// for this hint if the compile time SDL2 version wasn't (and if not this won't hurt)
+	if (SDL_getenv("SDL_ENABLE_SCREEN_KEYBOARD") == NULL) {
+		SDL_setenv("SDL_ENABLE_SCREEN_KEYBOARD", "0", 0);
+	}
+  #endif
 #endif
 
 	try {
