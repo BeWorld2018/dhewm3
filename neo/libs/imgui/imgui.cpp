@@ -15814,6 +15814,9 @@ static void Platform_SetClipboardTextFn_DefaultImpl(ImGuiContext* ctx, const cha
 #if defined(__APPLE__) && TARGET_OS_IPHONE
 #define IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
 #endif
+#if defined(__MORPHOS__)
+#define IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
+#endif
 #if defined(__3DS__)
 #define IMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
 #endif

@@ -10,8 +10,8 @@ BB  = $(B)/base
 B3  = $(B)/d3xp
 BR  = $(B)/doom
 
-CXX = ppc-morphos-g++-11 -mcpu=750 -mtune=7450
-CC = ppc-morphos-gcc-11 -mcpu=750 -mtune=7450
+CXX = ppc-morphos-g++-15 -mcpu=750 -mtune=7450
+CC = ppc-morphos-gcc-15 -mcpu=750 -mtune=7450
 STRIP = ppc-morphos-strip
 AR = ppc-morphos-ar
 RANLIB = ppc-morphos-ranlib
